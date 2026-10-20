@@ -8,23 +8,37 @@ class WidgetConfigSerializer(serializers.ModelSerializer):
     class Meta:
         model = WidgetConfig
         fields = [
+            'id',
+            'name',
+            'slug',
+            'avatar_url',
+            'banner_url',
             'widget_title',
             'welcome_message',
             'theme',
             'primary_color',
             'preset_amounts_xlm',
             'preset_amounts_usdc',
+            'preset_amounts_usdt',
             'allow_custom_amount',
             'allow_supporter_message',
+            'filter_remarks',
+            'banned_words',
+            'filter_action',
             'overlay_token',
             'alert_sound_enabled',
             'alert_duration_seconds',
             'is_active',
+            'is_default',
+            'created_at',
+            'updated_at',
         ]
+        read_only_fields = ['id', 'overlay_token', 'created_at', 'updated_at']
 
 
 class CreatorProfileSerializer(serializers.ModelSerializer):
     widget_config = WidgetConfigSerializer(read_only=True)
+    widgets = WidgetConfigSerializer(many=True, read_only=True)
 
     class Meta:
         model = CreatorProfile
@@ -35,11 +49,13 @@ class CreatorProfileSerializer(serializers.ModelSerializer):
             'display_name',
             'bio',
             'avatar_url',
+            'banner_url',
             'website_url',
             'social_links',
             'receiving_wallet_address',
             'supported_assets',
             'widget_config',
+            'widgets',
             'created_at',
             'updated_at',
         ]
@@ -52,6 +68,9 @@ class CreatorProfileSerializer(serializers.ModelSerializer):
 
 
 class CreatorRegistrationSerializer(serializers.ModelSerializer):
+    receiving_wallet_address = serializers.CharField(required=False, allow_blank=True)
+    supported_assets = serializers.ListField(child=serializers.CharField(), required=False)
+
     class Meta:
         model = CreatorProfile
         fields = [
@@ -59,6 +78,7 @@ class CreatorRegistrationSerializer(serializers.ModelSerializer):
             'display_name',
             'bio',
             'avatar_url',
+            'banner_url',
             'website_url',
             'social_links',
             'receiving_wallet_address',
@@ -76,6 +96,7 @@ class CreatorPublicSerializer(serializers.ModelSerializer):
     Publicly safe serialized profile used by the embeddable tipping widget.
     """
     widget_config = WidgetConfigSerializer(read_only=True)
+    widgets = WidgetConfigSerializer(many=True, read_only=True)
 
     class Meta:
         model = CreatorProfile
@@ -84,11 +105,13 @@ class CreatorPublicSerializer(serializers.ModelSerializer):
             'display_name',
             'bio',
             'avatar_url',
+            'banner_url',
             'website_url',
             'social_links',
             'receiving_wallet_address',
             'supported_assets',
             'widget_config',
+            'widgets',
         ]
 
 
@@ -109,6 +132,7 @@ class CreatorDashboardResponseSerializer(serializers.Serializer):
     tips_today_usdc = serializers.DecimalField(max_digits=20, decimal_places=7)
     recent_tips = serializers.ListField(child=serializers.DictField())
     top_supporters = TopSupporterSerializer(many=True)
+    biggest_tip = serializers.DictField(required=False, allow_null=True)
     widget_status = serializers.DictField()
 
 

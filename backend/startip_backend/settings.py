@@ -154,6 +154,11 @@ if _frontend_dist.exists() and (_frontend_dist / 'assets').exists():
 
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 
+# Media files (user uploads for creator avatars & banners)
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+(MEDIA_ROOT / 'uploads').mkdir(parents=True, exist_ok=True)
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # CORS Settings (Allow cross-origin requests for embeddable widgets)

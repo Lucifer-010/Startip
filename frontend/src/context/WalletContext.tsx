@@ -22,8 +22,16 @@ interface WalletContextType {
   isConnecting: boolean;
   needsRegistration: boolean;
   error: string | null;
-  connectWallet: () => Promise<void>;
+  balances: {
+    XLM: string;
+    USDC: string;
+    USDT: string;
+  };
+  isLoadingBalances: boolean;
+  refreshBalances: (addr?: string) => Promise<void>;
+  connectWallet: () => Promise<{ address: string; is_registered: boolean } | null>;
   disconnectWallet: () => Promise<void>;
+  disconnect: () => Promise<void>;
   openProfileModal: () => Promise<void>;
   completeRegistration: (data: {
     username: string;
@@ -38,12 +46,42 @@ interface WalletContextType {
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
-  const [walletAddress, setWalletAddress] = useState<string | null>(null);
+  const [walletAddress, setWalletAddress] = useState<string | null>(() => {
+    return typeof window !== 'undefined' ? localStorage.getItem('startip_wallet_address') : null;
+  });
   const [creator, setCreator] = useState<CreatorProfile | null>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    return typeof window !== 'undefined' && !!localStorage.getItem('startip_session_token');
+  });
   const [isConnecting, setIsConnecting] = useState<boolean>(false);
   const [needsRegistration, setNeedsRegistration] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [balances, setBalances] = useState<{ XLM: string; USDC: string; USDT: string }>({
+    XLM: '0.00',
+    USDC: '0.00',
+    USDT: '0.00',
+  });
+  const [isLoadingBalances, setIsLoadingBalances] = useState<boolean>(false);
+
+  const refreshBalances = async (addr?: string) => {
+    const target = addr || walletAddress || (typeof window !== 'undefined' ? localStorage.getItem('startip_wallet_address') : null);
+    if (!target) return;
+    setIsLoadingBalances(true);
+    try {
+      const res = await api.getWalletBalance(target);
+      if (res && res.balances) {
+        setBalances({
+          XLM: res.balances.XLM || '0.00',
+          USDC: res.balances.USDC || '0.00',
+          USDT: res.balances.USDT || '0.00',
+        });
+      }
+    } catch (err) {
+      console.warn('Failed to load wallet balance:', err);
+    } finally {
+      setIsLoadingBalances(false);
+    }
+  };
 
   // Auto-restore session from localStorage on startup
   useEffect(() => {
@@ -52,6 +90,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     if (token && savedAddress) {
       setWalletAddress(savedAddress);
       setIsAuthenticated(true);
+      refreshBalances(savedAddress);
       api
         .getMe()
         .then((profile) => {
@@ -73,6 +112,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       const profile = await api.getMe();
       setCreator(profile);
       setNeedsRegistration(false);
+      refreshBalances();
     } catch (err: any) {
       console.warn('Failed to refresh profile:', err.message);
     }
@@ -88,10 +128,11 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     setError(null);
     try {
       // 1. Open official Stellar Wallets Kit auth modal dialog
-      const { address } = await StellarWalletsKit.authModal();
+      const authResult = await StellarWalletsKit.authModal();
+      const address = authResult?.address;
       if (!address) {
         setIsConnecting(false);
-        return;
+        return null;
       }
 
       setWalletAddress(address);
@@ -106,7 +147,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
           networkPassphrase: Networks.TESTNET,
           address,
         });
-        signatureHex = signResult.signedMessage || '';
+        signatureHex = signResult?.signedMessage || '';
       } catch (signErr) {
         console.warn('Wallet signing skipped or unsupported by provider, using verified authorization:', signErr);
       }
@@ -127,11 +168,18 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         setCreator(profile);
         setNeedsRegistration(false);
       } else {
+        setCreator(null);
         setNeedsRegistration(true);
       }
+      refreshBalances(address);
+      return { address, is_registered: authRes.is_registered };
     } catch (err: any) {
+      if (err?.message?.includes('closed the modal') || err?.code === -1) {
+        return null;
+      }
       console.error('Official Stellar Wallets Kit connection error:', err);
       setError(err.message || 'Failed to connect Stellar wallet.');
+      throw err;
     } finally {
       setIsConnecting(false);
     }
@@ -160,6 +208,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       });
       setCreator(newProfile);
       setNeedsRegistration(false);
+      refreshBalances();
       return newProfile;
     } catch (err: any) {
       setError(err.message || 'Registration failed.');
@@ -180,6 +229,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       setCreator(null);
       setIsAuthenticated(false);
       setNeedsRegistration(false);
+      setBalances({ XLM: '0.00', USDC: '0.00', USDT: '0.00' });
     }
   };
 
@@ -206,8 +256,12 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         isConnecting,
         needsRegistration,
         error,
+        balances,
+        isLoadingBalances,
+        refreshBalances,
         connectWallet,
         disconnectWallet,
+        disconnect: disconnectWallet,
         openProfileModal,
         completeRegistration,
         refreshProfile,

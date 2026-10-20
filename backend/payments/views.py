@@ -42,13 +42,23 @@ class CreatePaymentRequestView(APIView):
 
         data = serializer.validated_data
         try:
+            creator = CreatorProfile.objects.prefetch_related('widgets').get(username__iexact=data['creator_username'])
+            widget = None
+            if data.get('widget_id'):
+                widget = creator.widgets.filter(id=data['widget_id']).first()
+            elif data.get('widget_slug'):
+                widget = creator.widgets.filter(slug__iexact=data['widget_slug']).first()
+            if not widget:
+                widget = creator.widget_config
+
             tip = payment_engine.create_payment_request(
                 creator_username=data['creator_username'],
                 asset_code=data['asset_code'],
                 amount=data['amount'],
                 supporter_name=data.get('supporter_name', 'Anonymous'),
                 message=data.get('message', ''),
-                supporter_wallet=data.get('supporter_wallet', '')
+                supporter_wallet=data.get('supporter_wallet', ''),
+                widget=widget
             )
             return Response(PaymentRequestResponseSerializer(tip).data, status=status.HTTP_201_CREATED)
         except CreatorProfile.DoesNotExist:
@@ -142,8 +152,9 @@ class TipListView(APIView):
         summary='List creator tip history',
         description='Returns filterable tip transaction history for the authenticated creator.',
         parameters=[
-            OpenApiParameter(name='asset', description='Filter by XLM or USDC', required=False, type=str),
+            OpenApiParameter(name='asset', description='Filter by XLM, USDC, or USDT', required=False, type=str),
             OpenApiParameter(name='status', description='Filter by status (confirmed, pending, failed)', required=False, type=str),
+            OpenApiParameter(name='widget_id', description='Filter by widget/campaign ID', required=False, type=str),
             OpenApiParameter(name='search', description='Search by supporter name or reference ID', required=False, type=str),
         ],
         responses={200: TipDetailSerializer(many=True)}
@@ -154,7 +165,7 @@ class TipListView(APIView):
         if not creator:
             return Response({'error': 'Creator profile not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-        qs = Tip.objects.filter(creator=creator)
+        qs = Tip.objects.filter(creator=creator).select_related('widget')
 
         asset = request.query_params.get('asset')
         if asset:
@@ -163,6 +174,10 @@ class TipListView(APIView):
         tip_status = request.query_params.get('status')
         if tip_status:
             qs = qs.filter(status=tip_status.lower())
+
+        widget_id = request.query_params.get('widget_id')
+        if widget_id and widget_id.lower() != 'all':
+            qs = qs.filter(widget_id=widget_id)
 
         search = request.query_params.get('search')
         if search:

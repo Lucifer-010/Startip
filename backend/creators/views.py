@@ -47,7 +47,11 @@ class CreatorRegisterView(APIView):
         serializer = CreatorRegistrationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        creator = serializer.save(wallet_address=wallet_address)
+        receiving_wallet = serializer.validated_data.get('receiving_wallet_address') or wallet_address
+        creator = serializer.save(
+            wallet_address=wallet_address,
+            receiving_wallet_address=receiving_wallet
+        )
         # Create default widget config
         WidgetConfig.objects.create(creator=creator)
 
@@ -81,7 +85,7 @@ class CreatorMeView(APIView):
     def get(self, request):
         wallet_address = request.wallet_address
         try:
-            creator = CreatorProfile.objects.select_related('widget_config').get(wallet_address=wallet_address)
+            creator = CreatorProfile.objects.prefetch_related('widgets').get(wallet_address=wallet_address)
         except CreatorProfile.DoesNotExist:
             return Response(
                 {'error': 'No creator profile found for this wallet address.'},
@@ -127,27 +131,156 @@ class WidgetConfigMeView(APIView):
 
     @extend_schema(
         tags=['Widget Configuration'],
-        summary='Update tipping widget configuration',
-        description='Customizes widget branding, color palette, preset amounts, and alert duration.',
+        summary='Get or update tipping widget configuration',
+        description='Customizes widget branding, color palette, preset amounts, avatar, banner, and alert duration.',
         request=WidgetConfigSerializer,
         responses={200: WidgetConfigSerializer}
     )
+    def get(self, request):
+        wallet_address = request.wallet_address
+        creator = CreatorProfile.objects.prefetch_related('widgets').filter(wallet_address=wallet_address).first()
+        if not creator:
+            return Response({'error': 'Creator profile not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        widget_id = request.query_params.get('widget_id')
+        if widget_id:
+            config = creator.widgets.filter(id=widget_id).first()
+        else:
+            config = creator.widget_config
+
+        if not config:
+            config = WidgetConfig.objects.create(creator=creator, is_default=True, name='Main Tip Link')
+
+        return Response(WidgetConfigSerializer(config).data)
+
     def patch(self, request):
         wallet_address = request.wallet_address
-        try:
-            creator = CreatorProfile.objects.get(wallet_address=wallet_address)
+        creator = CreatorProfile.objects.prefetch_related('widgets').filter(wallet_address=wallet_address).first()
+        if not creator:
+            return Response({'error': 'Creator profile not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        widget_id = request.query_params.get('widget_id')
+        if widget_id:
+            config = creator.widgets.filter(id=widget_id).first()
+        else:
             config = creator.widget_config
-        except (CreatorProfile.DoesNotExist, WidgetConfig.DoesNotExist):
-            return Response(
-                {'error': 'Widget configuration not found.'},
-                status=status.HTTP_404_NOT_FOUND
-            )
+
+        if not config:
+            config = WidgetConfig.objects.create(creator=creator, is_default=True, name='Main Tip Link')
 
         serializer = WidgetConfigSerializer(config, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
-        serializer.save()
 
+        if serializer.validated_data.get('is_default'):
+            creator.widgets.exclude(id=config.id).update(is_default=False)
+
+        serializer.save()
         return Response(serializer.data)
+
+
+class CreatorWidgetsListView(APIView):
+    """
+    CRUD for multiple tipping widgets/links per creator.
+    """
+    permission_classes = [IsWalletAuthenticated]
+
+    @extend_schema(
+        tags=['Widget Configuration'],
+        summary='List or create creator tip widgets',
+        description='Returns all custom tip links/widgets or creates a new customized one.',
+        responses={200: WidgetConfigSerializer(many=True), 201: WidgetConfigSerializer}
+    )
+    def get(self, request):
+        wallet_address = request.wallet_address
+        creator = CreatorProfile.objects.prefetch_related('widgets').filter(wallet_address=wallet_address).first()
+        if not creator:
+            return Response({'error': 'Creator profile not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if not creator.widgets.exists():
+            WidgetConfig.objects.create(creator=creator, is_default=True, name='Main Tip Link')
+
+        widgets = creator.widgets.all()
+        return Response(WidgetConfigSerializer(widgets, many=True).data)
+
+    def post(self, request):
+        wallet_address = request.wallet_address
+        creator = CreatorProfile.objects.filter(wallet_address=wallet_address).first()
+        if not creator:
+            return Response({'error': 'Creator profile not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = WidgetConfigSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        is_default = serializer.validated_data.get('is_default', False)
+        if not creator.widgets.exists():
+            is_default = True
+        elif is_default:
+            creator.widgets.update(is_default=False)
+
+        widget = serializer.save(creator=creator, is_default=is_default)
+        return Response(WidgetConfigSerializer(widget).data, status=status.HTTP_201_CREATED)
+
+
+class CreatorWidgetDetailView(APIView):
+    """
+    Retrieve, update or delete a specific tipping widget.
+    """
+    permission_classes = [IsWalletAuthenticated]
+
+    def get(self, request, pk):
+        wallet_address = request.wallet_address
+        creator = CreatorProfile.objects.filter(wallet_address=wallet_address).first()
+        if not creator:
+            return Response({'error': 'Creator profile not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        widget = creator.widgets.filter(id=pk).first()
+        if not widget:
+            return Response({'error': 'Widget not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        return Response(WidgetConfigSerializer(widget).data)
+
+    def patch(self, request, pk):
+        wallet_address = request.wallet_address
+        creator = CreatorProfile.objects.filter(wallet_address=wallet_address).first()
+        if not creator:
+            return Response({'error': 'Creator profile not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        widget = creator.widgets.filter(id=pk).first()
+        if not widget:
+            return Response({'error': 'Widget not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = WidgetConfigSerializer(widget, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+
+        if serializer.validated_data.get('is_default'):
+            creator.widgets.exclude(id=widget.id).update(is_default=False)
+
+        serializer.save()
+        return Response(serializer.data)
+
+    def delete(self, request, pk):
+        wallet_address = request.wallet_address
+        creator = CreatorProfile.objects.filter(wallet_address=wallet_address).first()
+        if not creator:
+            return Response({'error': 'Creator profile not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        widget = creator.widgets.filter(id=pk).first()
+        if not widget:
+            return Response({'error': 'Widget not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if creator.widgets.count() <= 1:
+            return Response({'error': 'Cannot delete your only tipping widget. Edit it instead.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        was_default = widget.is_default
+        widget.delete()
+
+        if was_default:
+            next_default = creator.widgets.first()
+            if next_default:
+                next_default.is_default = True
+                next_default.save()
+
+        return Response({'message': 'Widget successfully deleted.'}, status=status.HTTP_200_OK)
 
 
 class CreatorPublicProfileView(APIView):
@@ -167,13 +300,27 @@ class CreatorPublicProfileView(APIView):
     )
     def get(self, request, username):
         try:
-            creator = CreatorProfile.objects.select_related('widget_config').get(username__iexact=username)
+            creator = CreatorProfile.objects.prefetch_related('widgets').get(username__iexact=username)
         except CreatorProfile.DoesNotExist:
             return Response(
                 {'error': f'Creator @{username} not found.'},
                 status=status.HTTP_404_NOT_FOUND
             )
-        return Response(CreatorPublicSerializer(creator).data)
+
+        widget_param = request.query_params.get('widget')
+        active_widget = None
+        if widget_param:
+            active_widget = (
+                creator.widgets.filter(slug__iexact=widget_param).first() or
+                (creator.widgets.filter(id=int(widget_param)).first() if widget_param.isdigit() else None)
+            )
+        if not active_widget:
+            active_widget = creator.widget_config
+
+        data = CreatorPublicSerializer(creator).data
+        if active_widget:
+            data['widget_config'] = WidgetConfigSerializer(active_widget).data
+        return Response(data)
 
 
 class CreatorDashboardView(APIView):
@@ -191,7 +338,7 @@ class CreatorDashboardView(APIView):
     def get(self, request):
         wallet_address = request.wallet_address
         try:
-            creator = CreatorProfile.objects.select_related('widget_config').get(wallet_address=wallet_address)
+            creator = CreatorProfile.objects.prefetch_related('widgets').get(wallet_address=wallet_address)
         except CreatorProfile.DoesNotExist:
             return Response(
                 {'error': 'Creator profile not found.'},
@@ -234,13 +381,37 @@ class CreatorDashboardView(APIView):
 
         # Top supporters
         top_supporters_qs = (
-            confirmed_tips.exclude(supporter_name__isnull=True)
-            .exclude(supporter_name='')
+            confirmed_tips
             .values('supporter_name', 'supporter_wallet', 'asset_code')
             .annotate(total_amount=Sum('amount'), tips_count=Count('id'))
             .order_by('-total_amount')[:5]
         )
+        top_supporters_list = [
+            {
+                'supporter_name': s['supporter_name'] or (f"{s['supporter_wallet'][:4]}…{s['supporter_wallet'][-4:]}" if s['supporter_wallet'] else 'Anonymous'),
+                'supporter_wallet': s['supporter_wallet'] or '',
+                'total_amount': str(s['total_amount']),
+                'asset_code': s['asset_code'],
+                'tips_count': s['tips_count'],
+            }
+            for s in top_supporters_qs
+        ]
 
+        # Biggest tip all-time
+        biggest_tip_obj = confirmed_tips.order_by('-amount').first()
+        biggest_tip_data = None
+        if biggest_tip_obj:
+            biggest_tip_data = {
+                'id': biggest_tip_obj.reference_id,
+                'supporter_name': biggest_tip_obj.supporter_name or 'Anonymous',
+                'amount': str(biggest_tip_obj.amount),
+                'asset_code': biggest_tip_obj.asset_code,
+                'message': biggest_tip_obj.message or '',
+                'stellar_tx_hash': biggest_tip_obj.stellar_tx_hash or '',
+                'created_at': biggest_tip_obj.created_at.isoformat(),
+            }
+
+        widget_cfg = creator.widget_config
         dashboard_data = {
             'total_xlm_tips': total_xlm,
             'total_usdc_tips': total_usdc,
@@ -249,12 +420,14 @@ class CreatorDashboardView(APIView):
             'tips_today_xlm': today_xlm,
             'tips_today_usdc': today_usdc,
             'recent_tips': recent_tips_data,
-            'top_supporters': list(top_supporters_qs),
+            'top_supporters': top_supporters_list,
+            'biggest_tip': biggest_tip_data,
             'widget_status': {
-                'is_active': creator.widget_config.is_active,
-                'theme': creator.widget_config.theme,
-                'primary_color': creator.widget_config.primary_color,
-                'overlay_token': str(creator.widget_config.overlay_token),
+                'is_active': widget_cfg.is_active if widget_cfg else True,
+                'theme': widget_cfg.theme if widget_cfg else 'dark',
+                'primary_color': widget_cfg.primary_color if widget_cfg else '#6366F1',
+                'overlay_token': str(widget_cfg.overlay_token) if widget_cfg else '',
+                'total_widgets_count': creator.widgets.count(),
             }
         }
 
@@ -275,21 +448,39 @@ class CreatorEmbedCodeView(APIView):
     )
     def get(self, request, username):
         try:
-            creator = CreatorProfile.objects.select_related('widget_config').get(username__iexact=username)
+            creator = CreatorProfile.objects.prefetch_related('widgets').get(username__iexact=username)
         except CreatorProfile.DoesNotExist:
             return Response(
                 {'error': f'Creator @{username} not found.'},
                 status=status.HTTP_404_NOT_FOUND
             )
 
+        widget_id = request.query_params.get('widget_id')
+        widget_slug = request.query_params.get('widget_slug')
+        widget_param = request.query_params.get('widget')
+        widget = None
+        if widget_id:
+            widget = creator.widgets.filter(id=widget_id).first()
+        elif widget_slug:
+            widget = creator.widgets.filter(slug=widget_slug).first()
+        elif widget_param:
+            if widget_param.isdigit():
+                widget = creator.widgets.filter(id=int(widget_param)).first()
+            if not widget:
+                widget = creator.widgets.filter(slug=widget_param).first()
+        if not widget:
+            widget = creator.widget_config
+
         host = request.get_host()
         scheme = request.scheme
 
-        direct_link = f"{scheme}://{host}/tip/{creator.username}/"
-        overlay_url = f"{scheme}://{host}/overlay/{creator.widget_config.overlay_token}/"
+        direct_link = f"{scheme}://{host}/tip/{creator.username}/" if not widget or widget.is_default else f"{scheme}://{host}/tip/{creator.username}?widget={widget.slug}"
+        overlay_token = str(widget.overlay_token) if widget else (str(creator.widget_config.overlay_token) if creator.widget_config else '')
+        overlay_url = f"{scheme}://{host}/overlay/{overlay_token}/"
+        embed_param = f"?widget={widget.slug}" if widget and not widget.is_default else ""
         iframe_code = (
             f'<iframe\n'
-            f'  src="{scheme}://{host}/embed/{creator.username}/"\n'
+            f'  src="{scheme}://{host}/embed/{creator.username}/{embed_param}"\n'
             f'  width="380"\n'
             f'  height="540"\n'
             f'  frameborder="0"\n'
@@ -302,12 +493,15 @@ class CreatorEmbedCodeView(APIView):
             f'<script\n'
             f'  src="{scheme}://{host}/static/widget.js"\n'
             f'  data-creator="{creator.username}"\n'
+            f'  data-widget="{widget.slug if widget else "main"}"\n'
             f'  data-target="startip-widget">\n'
             f'</script>'
         )
 
         return Response({
             'creator_username': creator.username,
+            'widget_id': widget.id if widget else None,
+            'widget_name': widget.name if widget else 'Main Tip Link',
             'direct_link': direct_link,
             'iframe_code': iframe_code,
             'javascript_code': js_code,

@@ -40,13 +40,14 @@ export function DemoWidgetPage({
   const { walletAddress, signTransactionXDR } = useWallet();
 
   const [stepState, setStepState] = useState<DemoStepState>(initialStep);
-  const [currency, setCurrency] = useState<'USDC' | 'XLM'>('USDC');
+  const [currency, setCurrency] = useState<'USDC' | 'XLM' | 'USDT'>('USDC');
   const [amount, setAmount] = useState<number>(5);
   const [fanName, setFanName] = useState<string>('Ada');
   const [fanMessage, setFanMessage] = useState<string>(
     'Your Stellar series got me my first dev job.'
   );
   const [mobileViewTab, setMobileViewTab] = useState<'fan' | 'creator'>('fan');
+  const [autoAdvance, setAutoAdvance] = useState<boolean>(false);
 
   // Backend state
   const [targetCreatorProfile, setTargetCreatorProfile] = useState<CreatorProfile | null>(null);
@@ -62,20 +63,29 @@ export function DemoWidgetPage({
   const creatorUsername = targetCreator || 'alex_dev';
 
   useEffect(() => {
-    api.getPublicCreator(creatorUsername)
+    const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+    const widgetParam = urlParams?.get('widget') || undefined;
+    api.getPublicCreator(creatorUsername, widgetParam)
       .then((res) => setTargetCreatorProfile(res))
       .catch((err) => console.warn('Could not load creator profile:', err));
   }, [creatorUsername]);
 
-  const presets = currency === 'USDC' ? [1, 2, 5, 10] : [10, 25, 50, 100];
+  const presets =
+    currency === 'USDC'
+      ? targetCreatorProfile?.widget_config?.preset_amounts_usdc || [1, 2, 5, 10]
+      : currency === 'XLM'
+      ? targetCreatorProfile?.widget_config?.preset_amounts_xlm || [10, 25, 50, 100]
+      : targetCreatorProfile?.widget_config?.preset_amounts_usdt || [1, 5, 10, 20];
 
-  const handleCurrencySwitch = (newCur: 'USDC' | 'XLM') => {
+  const handleCurrencySwitch = (newCur: 'USDC' | 'XLM' | 'USDT') => {
     setCurrency(newCur);
     setCustomAmountActive(false);
-    if (newCur === 'USDC' && ![1, 2, 5, 10].includes(amount)) {
-      setAmount(5);
-    } else if (newCur === 'XLM' && ![10, 25, 50, 100].includes(amount)) {
-      setAmount(25);
+    if (newCur === 'USDC') {
+      setAmount(presets[1] || 5);
+    } else if (newCur === 'XLM') {
+      setAmount(presets[1] || 25);
+    } else {
+      setAmount(presets[1] || 5);
     }
   };
 
@@ -88,6 +98,8 @@ export function DemoWidgetPage({
     try {
       const activeAmount = customAmountActive && customAmountInput ? parseFloat(customAmountInput) : amount;
       const creatorUser = targetCreatorProfile?.username || creatorUsername;
+      const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+      const widgetParam = urlParams?.get('widget') || undefined;
 
       // 1. Create payment request on backend
       const paymentReq = await api.createPaymentRequest({
@@ -97,6 +109,7 @@ export function DemoWidgetPage({
         supporter_name: displaySenderName,
         message: displayMessage,
         supporter_wallet: walletAddress || undefined,
+        widget_slug: widgetParam,
       });
 
       // 2. Build unsigned transaction XDR
@@ -173,12 +186,21 @@ export function DemoWidgetPage({
   // ==========================================================================
   const renderFanTipCard = () => (
     <div className="w-full max-w-[360px] mx-auto rounded-[28px] bg-white text-[#0B1026] shadow-[0px_2px_4px_rgba(11,16,38,0.06),0px_24px_56px_rgba(0,0,0,0.35)] overflow-hidden relative pb-5">
-      {/* Top Lavender Banner (#E6E0FF) */}
+      {/* Top Banner (custom per widget or default) */}
       <div className="relative h-[72px] w-full bg-[#E6E0FF] px-4 pt-3 overflow-hidden">
-        {/* Decorative background curves matching Figma icon/236 */}
-        <div className="pointer-events-none absolute -right-12 -top-16 w-48 h-48 rounded-full border-[1.5px] border-[#C7BAFF]" />
-        <div className="pointer-events-none absolute right-5 top-4 w-20 h-20 rounded-full bg-[#C7BAFF]/45" />
-        <div className="pointer-events-none absolute left-24 top-8 w-36 h-36 rounded-full border-[1.5px] border-[#C7BAFF]" />
+        {targetCreatorProfile?.widget_config?.banner_url ? (
+          <img
+            src={targetCreatorProfile.widget_config.banner_url}
+            alt="Banner"
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+        ) : (
+          <>
+            <div className="pointer-events-none absolute -right-12 -top-16 w-48 h-48 rounded-full border-[1.5px] border-[#C7BAFF]" />
+            <div className="pointer-events-none absolute right-5 top-4 w-20 h-20 rounded-full bg-[#C7BAFF]/45" />
+            <div className="pointer-events-none absolute left-24 top-8 w-36 h-36 rounded-full border-[1.5px] border-[#C7BAFF]" />
+          </>
+        )}
 
         {/* Testnet pill */}
         <div className="relative z-10 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-[#0B1026] text-[#C6FF3D] text-[12px] leading-[15px] font-semibold">
@@ -188,10 +210,18 @@ export function DemoWidgetPage({
       </div>
 
       {/* Overlapping Creator Avatar */}
-      <div className="absolute left-5 top-10 w-16 h-16 rounded-full bg-[#0B1026] border-4 border-white flex items-center justify-center z-20">
-        <span className="font-extrabold text-[20px] leading-[26px] text-[#C6FF3D]">
-          {(targetCreatorProfile?.display_name || creatorUsername).charAt(0).toUpperCase()}
-        </span>
+      <div className="absolute left-5 top-10 w-16 h-16 rounded-full bg-[#0B1026] border-4 border-white flex items-center justify-center z-20 overflow-hidden shadow-md">
+        {(targetCreatorProfile?.widget_config?.avatar_url || targetCreatorProfile?.avatar_url) ? (
+          <img
+            src={targetCreatorProfile?.widget_config?.avatar_url || targetCreatorProfile?.avatar_url}
+            alt="Avatar"
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <span className="font-extrabold text-[20px] leading-[26px] text-[#C6FF3D]">
+            {(targetCreatorProfile?.display_name || creatorUsername).charAt(0).toUpperCase()}
+          </span>
+        )}
       </div>
 
       {/* Creator Header Info */}
@@ -199,14 +229,14 @@ export function DemoWidgetPage({
         <div className="space-y-1">
           <div className="flex items-baseline gap-2">
             <h3 className="font-extrabold text-[20px] leading-[28px] tracking-[-0.5px] text-[#0B1026]">
-              {targetCreatorProfile?.display_name || 'Alex Dev'}
+              {targetCreatorProfile?.widget_config?.widget_title || targetCreatorProfile?.display_name || 'Alex Dev'}
             </h3>
             <span className="text-[14px] leading-[18px] text-[#646A8A]">
               @{targetCreatorProfile?.username || creatorUsername}
             </span>
           </div>
           <p className="text-[14px] leading-[20px] text-[#4A5070]">
-            {targetCreatorProfile?.bio || 'Thanks for backing my open-source work. Every tip funds another free tutorial.'}
+            {targetCreatorProfile?.widget_config?.welcome_message || targetCreatorProfile?.bio || 'Thanks for backing my open-source work. Every tip funds another free tutorial.'}
           </p>
         </div>
       </div>
@@ -218,31 +248,43 @@ export function DemoWidgetPage({
       {/* ================================================================== */}
       {(stepState === '01_pick' || stepState === '01b_message') && (
         <div className="px-5 space-y-4">
-          {/* Currency Switcher */}
+          {/* Currency Switcher (USDC / XLM / USDT) */}
           <div className="flex flex-col items-center gap-2">
-            <div className="w-full p-1 rounded-[16px] bg-[#EEF0F7] grid grid-cols-2 gap-1">
+            <div className="w-full p-1 rounded-[16px] bg-[#EEF0F7] grid grid-cols-3 gap-1">
               <button
                 onClick={() => handleCurrencySwitch('USDC')}
-                className={`h-[40px] rounded-[12px] flex items-center justify-center gap-2 text-[14px] font-bold transition ${
+                className={`h-[40px] rounded-[12px] flex items-center justify-center gap-1.5 text-[13px] font-bold transition cursor-pointer ${
                   currency === 'USDC'
                     ? 'bg-white text-[#0B1026] shadow-[0px_1px_2px_rgba(11,16,38,0.08),0px_2px_8px_rgba(11,16,38,0.06)]'
                     : 'text-[#4A5070] hover:text-[#0B1026]'
                 }`}
               >
-                <UsdcBadge size={20} />
+                <UsdcBadge size={18} />
                 <span>USDC</span>
               </button>
 
               <button
                 onClick={() => handleCurrencySwitch('XLM')}
-                className={`h-[40px] rounded-[12px] flex items-center justify-center gap-2 text-[14px] font-bold transition ${
+                className={`h-[40px] rounded-[12px] flex items-center justify-center gap-1.5 text-[13px] font-bold transition cursor-pointer ${
                   currency === 'XLM'
                     ? 'bg-white text-[#0B1026] shadow-[0px_1px_2px_rgba(11,16,38,0.08),0px_2px_8px_rgba(11,16,38,0.06)]'
                     : 'text-[#4A5070] hover:text-[#0B1026]'
                 }`}
               >
-                <XlmBadge size={20} />
+                <XlmBadge size={18} />
                 <span>XLM</span>
+              </button>
+
+              <button
+                onClick={() => handleCurrencySwitch('USDT')}
+                className={`h-[40px] rounded-[12px] flex items-center justify-center gap-1.5 text-[13px] font-bold transition cursor-pointer ${
+                  currency === 'USDT'
+                    ? 'bg-white text-[#0B1026] shadow-[0px_1px_2px_rgba(11,16,38,0.08),0px_2px_8px_rgba(11,16,38,0.06)]'
+                    : 'text-[#4A5070] hover:text-[#0B1026]'
+                }`}
+              >
+                <span className="w-4 h-4 rounded-full bg-[#26A17B] text-white text-[9px] font-bold flex items-center justify-center">₮</span>
+                <span>USDT</span>
               </button>
             </div>
 

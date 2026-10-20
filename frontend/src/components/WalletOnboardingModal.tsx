@@ -201,8 +201,10 @@ export function WalletOnboardingModal({
           <button
             onClick={async () => {
               try {
-                await connectWallet();
-                onSuccess();
+                const res = await connectWallet();
+                if (res && res.is_registered) {
+                  onSuccess();
+                }
               } catch (e) {
                 // error handled in context
               }

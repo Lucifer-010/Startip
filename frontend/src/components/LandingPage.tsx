@@ -24,6 +24,7 @@ import {
 } from './Icons';
 import { CreatorDashboard } from './CreatorDashboard';
 import { useWallet } from '../context/WalletContext';
+import { WalletProfileDropdown } from './WalletProfileDropdown';
 
 interface LandingPageProps {
   onOpenDemo: () => void;
@@ -64,7 +65,12 @@ export function LandingPage({
 
   const handleConnectWallet = async () => {
     try {
-      await connectWallet();
+      const res = await connectWallet();
+      if (res && res.is_registered) {
+        onOpenDashboard();
+      } else if (res && !res.is_registered) {
+        onOpenWalletModal();
+      }
     } catch (err) {
       onOpenWalletModal();
     }
@@ -340,15 +346,20 @@ export function LandingPage({
 
           {/* Desktop Right Buttons */}
           <div className="hidden lg:flex items-center gap-2.5">
-            {isAuthenticated && creator ? (
-              <button
-                onClick={onOpenDashboard}
-                className="h-[42px] px-[20px] rounded-full bg-[#C6FF3D] hover:brightness-95 font-semibold text-[14px] leading-[18px] text-[#0B1026] transition cursor-pointer flex items-center gap-2"
-              >
-                <span>Dashboard</span>
-                <span className="font-mono-code text-[12px] opacity-80 font-bold">@{creator.username}</span>
-                <ArrowUpRight className="w-4 h-4" />
-              </button>
+            {isAuthenticated ? (
+              <div className="flex items-center gap-2.5">
+                <WalletProfileDropdown
+                  theme="dark"
+                  onNavigateToDashboard={onOpenDashboard}
+                />
+                <button
+                  onClick={onOpenDashboard}
+                  className="h-[42px] px-[20px] rounded-full bg-[#C6FF3D] hover:brightness-95 font-semibold text-[14px] leading-[18px] text-[#0B1026] transition cursor-pointer flex items-center gap-2 shadow-sm"
+                >
+                  <span>Dashboard</span>
+                  <ArrowUpRight className="w-4 h-4" />
+                </button>
+              </div>
             ) : (
               <>
                 <button
@@ -370,14 +381,11 @@ export function LandingPage({
 
           {/* Mobile Right Buttons */}
           <div className="flex lg:hidden items-center gap-2">
-            {isAuthenticated && creator ? (
-              <button
-                onClick={onOpenDashboard}
-                className="h-[40px] px-3.5 rounded-full bg-[#C6FF3D] font-semibold text-[13px] leading-[18px] text-[#0B1026] flex items-center gap-1.5"
-              >
-                <span>Dashboard</span>
-                <ArrowUpRight className="w-3.5 h-3.5" />
-              </button>
+            {isAuthenticated ? (
+              <WalletProfileDropdown
+                theme="dark"
+                onNavigateToDashboard={onOpenDashboard}
+              />
             ) : (
               <button
                 onClick={handleConnectWallet}
@@ -873,7 +881,7 @@ export function LandingPage({
                 </button>
                 <button
                   onClick={() => {
-                    const token = creator?.overlay_token || 'alex_dev_overlay_token';
+                    const token = creator?.widget_config?.overlay_token || creator?.widgets?.[0]?.overlay_token || 'alex_dev_overlay_token';
                     navigator.clipboard?.writeText(`${window.location.origin}/overlay/${token}/`);
                     setAddedToObs(true);
                     setTimeout(() => setAddedToObs(false), 2000);

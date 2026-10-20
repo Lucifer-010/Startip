@@ -9,27 +9,41 @@ export interface CreatorProfile {
   display_name: string;
   bio: string;
   avatar_url?: string;
+  banner_url?: string;
   website_url?: string;
   social_links?: Record<string, string>;
   receiving_wallet_address: string;
   supported_assets: string[];
   widget_config?: WidgetConfig;
+  widgets?: WidgetConfig[];
   created_at?: string;
 }
 
 export interface WidgetConfig {
+  id?: number;
+  name?: string;
+  slug?: string;
   widget_title: string;
   welcome_message: string;
+  avatar_url?: string;
+  banner_url?: string;
   theme: 'dark' | 'light' | 'midnight' | 'cyber';
   primary_color: string;
   preset_amounts_xlm: number[];
   preset_amounts_usdc: number[];
+  preset_amounts_usdt?: number[];
   allow_custom_amount: boolean;
   allow_supporter_message: boolean;
+  filter_remarks?: boolean;
+  banned_words?: string[];
+  filter_action?: 'mask' | 'block';
   overlay_token: string;
   alert_sound_enabled: boolean;
   alert_duration_seconds: number;
+  is_default?: boolean;
   is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface DashboardMetrics {
@@ -56,12 +70,33 @@ export interface DashboardMetrics {
     asset_code: string;
     tips_count: number;
   }>;
+  biggest_tip?: {
+    id: string;
+    supporter_name: string;
+    amount: string;
+    asset_code: string;
+    message: string;
+    stellar_tx_hash?: string;
+    created_at: string;
+  } | null;
   widget_status: {
     is_active: boolean;
     theme: string;
     primary_color: string;
     overlay_token: string;
   };
+}
+
+export interface WalletBalanceResponse {
+  address: string;
+  network: string;
+  balances: {
+    XLM: string;
+    USDC: string;
+    USDT: string;
+    [key: string]: string;
+  };
+  cached: boolean;
 }
 
 export interface TipHistoryItem {
@@ -72,18 +107,22 @@ export interface TipHistoryItem {
   supporter_wallet: string;
   supporter_name: string;
   message: string;
-  asset_code: 'XLM' | 'USDC';
+  asset_code: 'XLM' | 'USDC' | 'USDT';
   amount: string;
   status: 'pending' | 'submitted' | 'confirmed' | 'failed' | 'rejected';
   stellar_tx_hash: string | null;
   stellar_explorer_url: string | null;
   ledger_sequence?: number | null;
   ledger_closed_at?: string | null;
+  widget_id?: number | null;
+  widget_name?: string | null;
   created_at: string;
 }
 
 export interface EmbedCodeResponse {
   creator_username: string;
+  widget_name?: string;
+  widget_slug?: string;
   direct_link: string;
   iframe_code: string;
   javascript_code: string;
@@ -219,9 +258,67 @@ export const api = {
     return handleResponse<CreatorProfile>(res);
   },
 
-  async getPublicCreator(username: string): Promise<CreatorProfile> {
-    const res = await fetch(`${API_BASE}/creators/${encodeURIComponent(username)}/`);
+  async getWalletBalance(address?: string): Promise<WalletBalanceResponse> {
+    const query = address ? `?address=${encodeURIComponent(address)}` : '';
+    const res = await fetch(`${API_BASE}/wallet/balance/${query}`, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeader(),
+      },
+    });
+    return handleResponse<WalletBalanceResponse>(res);
+  },
+
+  async getPublicCreator(username: string, widget?: string): Promise<CreatorProfile> {
+    const query = widget ? `?widget=${encodeURIComponent(widget)}` : '';
+    const res = await fetch(`${API_BASE}/creators/${encodeURIComponent(username)}/${query}`);
     return handleResponse<CreatorProfile>(res);
+  },
+
+  // --- Multi-Widget & Tip Links ---
+  async getWidgets(): Promise<WidgetConfig[]> {
+    const res = await fetch(`${API_BASE}/creators/me/widgets/`, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeader(),
+      },
+    });
+    return handleResponse<WidgetConfig[]>(res);
+  },
+
+  async createWidget(payload: Partial<WidgetConfig>): Promise<WidgetConfig> {
+    const res = await fetch(`${API_BASE}/creators/me/widgets/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeader(),
+      },
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<WidgetConfig>(res);
+  },
+
+  async updateWidget(id: number, payload: Partial<WidgetConfig>): Promise<WidgetConfig> {
+    const res = await fetch(`${API_BASE}/creators/me/widgets/${id}/`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeader(),
+      },
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<WidgetConfig>(res);
+  },
+
+  async deleteWidget(id: number): Promise<{ success: boolean; message: string }> {
+    const res = await fetch(`${API_BASE}/creators/me/widgets/${id}/`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeader(),
+      },
+    });
+    return handleResponse<{ success: boolean; message: string }>(res);
   },
 
   // --- Dashboard & Analytics ---
@@ -235,8 +332,9 @@ export const api = {
     return handleResponse<DashboardMetrics>(res);
   },
 
-  async updateWidgetConfig(payload: Partial<WidgetConfig>): Promise<WidgetConfig> {
-    const res = await fetch(`${API_BASE}/creators/me/widget-config/`, {
+  async updateWidgetConfig(payload: Partial<WidgetConfig>, widgetId?: number): Promise<WidgetConfig> {
+    const query = widgetId ? `?widget_id=${widgetId}` : '';
+    const res = await fetch(`${API_BASE}/creators/me/widget-config/${query}`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -247,19 +345,22 @@ export const api = {
     return handleResponse<WidgetConfig>(res);
   },
 
-  async getEmbedCodes(username: string): Promise<EmbedCodeResponse> {
-    const res = await fetch(`${API_BASE}/creators/${encodeURIComponent(username)}/embed-code/`);
+  async getEmbedCodes(username: string, widgetIdOrSlug?: string | number): Promise<EmbedCodeResponse> {
+    const query = widgetIdOrSlug ? `?widget=${encodeURIComponent(String(widgetIdOrSlug))}` : '';
+    const res = await fetch(`${API_BASE}/creators/${encodeURIComponent(username)}/embed-code/${query}`);
     return handleResponse<EmbedCodeResponse>(res);
   },
 
   // --- Payments Engine ---
   async createPaymentRequest(payload: {
     creator_username: string;
-    asset_code: 'XLM' | 'USDC';
+    asset_code: 'XLM' | 'USDC' | 'USDT';
     amount: number | string;
     supporter_name?: string;
     message?: string;
     supporter_wallet?: string;
+    widget_id?: number;
+    widget_slug?: string;
   }): Promise<{
     reference_id: string;
     creator_username: string;
@@ -315,11 +416,13 @@ export const api = {
   async getTipHistory(params?: {
     asset?: string;
     status?: string;
+    widget_id?: string | number;
     search?: string;
   }): Promise<TipHistoryItem[]> {
     const query = new URLSearchParams();
     if (params?.asset && params.asset !== 'ALL') query.set('asset', params.asset);
     if (params?.status) query.set('status', params.status);
+    if (params?.widget_id && params.widget_id !== 'ALL') query.set('widget_id', String(params.widget_id));
     if (params?.search) query.set('search', params.search);
 
     const res = await fetch(`${API_BASE}/payments/tips/?${query.toString()}`, {
@@ -374,6 +477,28 @@ export const api = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
+    });
+    return handleResponse(res);
+  },
+
+  // --- Image Upload ---
+  async uploadImage(file: File): Promise<{
+    success: boolean;
+    url: string;
+    filename: string;
+    size?: number;
+  }> {
+    const formData = new FormData();
+    formData.append('image', file);
+    const headers: Record<string, string> = {};
+    const auth = getAuthHeader();
+    if (auth.Authorization) {
+      headers['Authorization'] = auth.Authorization;
+    }
+    const res = await fetch(`${API_BASE}/upload/image/`, {
+      method: 'POST',
+      headers,
+      body: formData,
     });
     return handleResponse(res);
   },

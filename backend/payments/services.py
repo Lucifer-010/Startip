@@ -8,7 +8,7 @@ from stellar_sdk.exceptions import NotFoundError, BadRequestError
 
 from .models import Tip
 from creators.models import CreatorProfile
-from core.utils import sanitize_message, is_valid_stellar_address
+from core.utils import sanitize_message, is_valid_stellar_address, filter_user_remark
 
 logger = logging.getLogger(__name__)
 
@@ -35,32 +35,48 @@ class StellarPaymentEngine:
         amount: Decimal,
         supporter_name: str = 'Anonymous',
         message: str = '',
-        supporter_wallet: str = ''
+        supporter_wallet: str = '',
+        widget=None
     ) -> Tip:
         """
         Validates parameters and generates an immutable payment request with unique memo reference.
         """
-        creator = CreatorProfile.objects.select_related('widget_config').get(username__iexact=creator_username)
+        creator = CreatorProfile.objects.prefetch_related('widgets').get(username__iexact=creator_username)
 
-        if not creator.widget_config.is_active:
+        active_widget = widget or creator.widget_config
+        if active_widget and not active_widget.is_active:
             raise ValueError("This creator's tipping widget is currently inactive.")
 
         asset_code = asset_code.upper()
         if asset_code not in creator.supported_assets:
-            raise ValueError(f"Asset '{asset_code}' is not accepted by @{creator.username}.")
+            if asset_code == 'USDT':
+                # Allow USDT
+                if 'USDT' not in creator.supported_assets:
+                    creator.supported_assets.append('USDT')
+                    creator.save()
+            else:
+                raise ValueError(f"Asset '{asset_code}' is not accepted by @{creator.username}.")
 
         if amount <= 0:
             raise ValueError("Tip amount must be greater than zero.")
 
         asset_issuer = ''
-        if asset_code == 'USDC':
+        if asset_code in ('USDC', 'USDT'):
             asset_issuer = self.usdc_issuer
 
         clean_message = sanitize_message(message)
         clean_name = sanitize_message(supporter_name, max_length=64) or 'Anonymous'
 
+        if active_widget and getattr(active_widget, 'filter_remarks', False) and active_widget.banned_words:
+            clean_message = filter_user_remark(
+                clean_message,
+                active_widget.banned_words,
+                getattr(active_widget, 'filter_action', 'mask')
+            )
+
         tip = Tip.objects.create(
             creator=creator,
+            widget=active_widget,
             supporter_wallet=supporter_wallet,
             supporter_name=clean_name,
             message=clean_message,
@@ -149,7 +165,7 @@ class StellarPaymentEngine:
         clean_tx_hash = stellar_tx_hash.strip().lower()
 
         with transaction.atomic():
-            tip = Tip.objects.select_for_update().select_related('creator__widget_config').get(reference_id=reference_id)
+            tip = Tip.objects.select_for_update().select_related('creator', 'widget').prefetch_related('creator__widgets').get(reference_id=reference_id)
 
             if tip.status == 'confirmed':
                 return tip

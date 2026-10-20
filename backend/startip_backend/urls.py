@@ -42,6 +42,13 @@ urlpatterns = [
     path('demo-bench/', demo_page_view, name='demo-page'),
 ]
 
+from django.conf import settings
+
+# Serve user uploaded media files (/media/...)
+urlpatterns.append(
+    re_path(r'^media/(?P<path>.*)$', serve, {'document_root': settings.MEDIA_ROOT})
+)
+
 # Serve compiled frontend static assets (/assets/...)
 if assets_dir:
     urlpatterns.append(
@@ -51,5 +58,5 @@ if assets_dir:
 # Root SPA & Catch-all client routes for SPA (e.g. /dashboard, /demo)
 urlpatterns.extend([
     path('', spa_index_view, name='frontend-root'),
-    re_path(r'^(?!api/|admin/|overlay/|embed/|static/|assets/|demo-bench/).*$', spa_index_view, name='spa-client-route'),
+    re_path(r'^(?!api/|admin/|overlay/|embed/|static/|assets/|media/|demo-bench/).*$', spa_index_view, name='spa-client-route'),
 ])

@@ -33,6 +33,14 @@ class Tip(models.Model):
         on_delete=models.CASCADE,
         related_name='tips'
     )
+    widget = models.ForeignKey(
+        'creators.WidgetConfig',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='tips',
+        help_text="The specific widget/tip link through which this tip was sent"
+    )
     supporter_wallet = models.CharField(
         max_length=56,
         blank=True,

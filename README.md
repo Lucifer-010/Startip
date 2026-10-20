@@ -17,11 +17,15 @@
 
 | Service | URL | Description |
 | :--- | :--- | :--- |
-| **Frontend Web App** | [http://localhost:5173](http://localhost:5173) | Main StarTip application (Landing, Widget, Creator Dashboard) |
-| **Interactive Demo Split Screen** | [http://localhost:5173/?creator=tobibuilds](http://localhost:5173/?creator=tobibuilds) | Live dual-view showing Fan Tip Card alongside Creator Stream Preview |
+| **Landing Page** | [http://localhost:5173/](http://localhost:5173/) | StarTip public homepage |
+| **Creator Dashboard** | [http://localhost:5173/dashboard](http://localhost:5173/dashboard) | Dedicated creator metrics, widget customizer & stream alerts |
+| **Interactive Demo (Split View)** | [http://localhost:5173/demo](http://localhost:5173/demo) | Dual-screen fan tip card & creator live stream preview |
+| **Creator Tip Page (@tobibuilds)** | [http://localhost:5173/tobibuilds](http://localhost:5173/tobibuilds) | Public tip card for `@tobibuilds` (also accessible at `/tip/tobibuilds`) |
+| **Creator Tip Page (@alex_dev)** | [http://localhost:5173/alex_dev](http://localhost:5173/alex_dev) | Public tip card for `@alex_dev` (also accessible at `/tip/alex_dev`) |
 | **Backend REST API** | [http://localhost:8000](http://localhost:8000) | Django REST Framework API root |
 | **Interactive OpenAPI (Swagger UI)** | [http://localhost:8000/api/docs/](http://localhost:8000/api/docs/) | Interactive API explorer & sandbox testing |
 | **ReDoc API Documentation** | [http://localhost:8000/api/redoc/](http://localhost:8000/api/redoc/) | Detailed OpenAPI 3.0 specification reference |
+| **Django Admin Portal** | [http://localhost:8000/admin/](http://localhost:8000/admin/) | Admin portal (`lucifer` / `death2025`) |
 | **OBS Livestream Alert Overlay** | [http://localhost:8000/overlay/3ecdb41a-f10e-48bf-9beb-f4dfd8373e69/](http://localhost:8000/overlay/3ecdb41a-f10e-48bf-9beb-f4dfd8373e69/) | OBS/Streamlabs browser source with real-time SSE animations |
 | **Standalone Embed Widget** | [http://localhost:8000/embed/tobibuilds/](http://localhost:8000/embed/tobibuilds/) | Standalone iframe / embeddable tip widget |
 
@@ -187,13 +191,15 @@ The database comes pre-seeded with creators matching the specification:
 - **Receiving Wallet**: `GBXK4H2M2P6LNV2B6XQQ5U3VYV6Y2R6E762E44P3A4L2K7C4M3O2DEV1`
 - **Overlay Token**: `3ecdb41a-f10e-48bf-9beb-f4dfd8373e69`
 - **OBS Overlay Link**: [http://localhost:8000/overlay/3ecdb41a-f10e-48bf-9beb-f4dfd8373e69/](http://localhost:8000/overlay/3ecdb41a-f10e-48bf-9beb-f4dfd8373e69/)
-- **Live Demo Link**: [http://localhost:5173/?creator=tobibuilds](http://localhost:5173/?creator=tobibuilds)
+- **Creator Tip Page**: [http://localhost:5173/tobibuilds](http://localhost:5173/tobibuilds)
+- **Interactive Dual Demo**: [http://localhost:5173/demo?creator=tobibuilds](http://localhost:5173/demo?creator=tobibuilds)
 
 ### Creator 2: Alex River (`@alex_dev`)
 - **Username**: `alex_dev`
 - **Display Name**: Alex River
 - **Receiving Wallet**: `GA2C5RFPE6GCKMY3US5PAB6UZLKIGAHWKXX2G2VRGV76LQ5NVGTZD4ME`
 - **Overlay Token**: `aeab5b7c-8b37-44d5-bbaf-b5641bba9cf4`
+- **Creator Tip Page**: [http://localhost:5173/alex_dev](http://localhost:5173/alex_dev)
 
 ---
 

@@ -44,7 +44,7 @@ def embed_widget_view(request, username):
     Renders standalone embeddable widget designed for iframe or embed integration.
     """
     try:
-        creator = CreatorProfile.objects.select_related('widget_config').get(username__iexact=username)
+        creator = CreatorProfile.objects.prefetch_related('widgets').get(username__iexact=username)
     except CreatorProfile.DoesNotExist:
         return HttpResponseNotFound(f"Creator @{username} not found.")
 
@@ -60,7 +60,7 @@ def demo_page_view(request):
     - Live alert trigger
     - Stellar Testnet transactions
     """
-    creators = CreatorProfile.objects.select_related('widget_config').all()[:10]
+    creators = CreatorProfile.objects.prefetch_related('widgets').all()[:10]
     first_creator = creators.first() if creators else None
     return render(request, 'demo.html', {
         'creators': creators,

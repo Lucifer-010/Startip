@@ -22,6 +22,10 @@ export default defineConfig(() => {
           target: backendTarget,
           changeOrigin: true,
         },
+        '/media': {
+          target: backendTarget,
+          changeOrigin: true,
+        },
         '/overlay': {
           target: backendTarget,
           changeOrigin: true,

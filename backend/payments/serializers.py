@@ -6,11 +6,13 @@ from core.utils import is_valid_stellar_address
 
 class CreatePaymentRequestSerializer(serializers.Serializer):
     creator_username = serializers.CharField(max_length=50, required=True)
-    asset_code = serializers.ChoiceField(choices=['XLM', 'USDC'], default='XLM')
+    asset_code = serializers.ChoiceField(choices=['XLM', 'USDC', 'USDT'], default='XLM')
     amount = serializers.DecimalField(max_digits=20, decimal_places=7, min_value=Decimal('0.0000001'))
     supporter_name = serializers.CharField(max_length=64, required=False, allow_blank=True, default='Anonymous')
     message = serializers.CharField(max_length=280, required=False, allow_blank=True, default='')
     supporter_wallet = serializers.CharField(max_length=56, required=False, allow_blank=True, default='')
+    widget_id = serializers.IntegerField(required=False, allow_null=True)
+    widget_slug = serializers.CharField(max_length=60, required=False, allow_blank=True, default='')
 
     def validate_supporter_wallet(self, value):
         if value and not is_valid_stellar_address(value):
@@ -72,6 +74,8 @@ class VerifyPaymentRequestSerializer(serializers.Serializer):
 class TipDetailSerializer(serializers.ModelSerializer):
     creator_username = serializers.CharField(source='creator.username')
     creator_display_name = serializers.CharField(source='creator.display_name')
+    widget_id = serializers.IntegerField(source='widget.id', read_only=True, allow_null=True)
+    widget_name = serializers.CharField(source='widget.name', read_only=True, allow_null=True)
     stellar_explorer_url = serializers.SerializerMethodField()
 
     class Meta:
@@ -81,6 +85,8 @@ class TipDetailSerializer(serializers.ModelSerializer):
             'reference_id',
             'creator_username',
             'creator_display_name',
+            'widget_id',
+            'widget_name',
             'supporter_wallet',
             'supporter_name',
             'message',
