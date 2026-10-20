@@ -16,6 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libpq-dev \
     curl \
+    netcat-openbsd \
     && rm -rf /var/lib/apt/lists/*
 
 # Install python dependencies in a dedicated layer for Docker cache reuse
@@ -26,12 +27,12 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy application source code
 COPY . /app/
 
-# Create non-root system user for security compliance
-RUN addgroup --system --gid 1001 startip && \
-    adduser --system --uid 1001 --gid 1001 --home /home/startip startip && \
+# Create startip user matching host development user ID 1000
+RUN (addgroup --system --gid 1000 startip || groupadd -g 1000 startip || true) && \
+    (adduser --system --uid 1000 --gid 1000 --home /home/startip startip || useradd -u 1000 -g 1000 -m startip || true) && \
     chmod +x /app/docker-entrypoint.sh && \
-    mkdir -p /app/staticfiles && \
-    chown -R startip:startip /app /home/startip
+    mkdir -p /app/staticfiles /app/media && \
+    chown -R 1000:1000 /app /home/startip
 
 USER startip
 

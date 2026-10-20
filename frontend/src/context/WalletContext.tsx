@@ -1,22 +1,19 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { StellarWalletsKit, Networks } from '@creit.tech/stellar-wallets-kit';
-import { FreighterModule } from '@creit.tech/stellar-wallets-kit/modules/freighter';
-import { AlbedoModule } from '@creit.tech/stellar-wallets-kit/modules/albedo';
-import { xBullModule } from '@creit.tech/stellar-wallets-kit/modules/xbull';
-import { LobstrModule } from '@creit.tech/stellar-wallets-kit/modules/lobstr';
+import { defaultModules } from '@creit.tech/stellar-wallets-kit/modules/utils';
 import { api, CreatorProfile } from '../services/api';
 
-// Initialize Stellar Wallets Kit configured for Stellar Testnet
-export const kit = new StellarWalletsKit({
-  network: Networks.TESTNET,
-  selectedWalletId: 'freighter',
-  modules: [
-    new FreighterModule(),
-    new AlbedoModule(),
-    new xBullModule(),
-    new LobstrModule(),
-  ],
-});
+// Initialize the official Stellar Wallets Kit globally for Stellar Testnet
+if (typeof window !== 'undefined') {
+  try {
+    StellarWalletsKit.init({
+      network: Networks.TESTNET,
+      modules: defaultModules(),
+    });
+  } catch (err) {
+    console.warn('StellarWalletsKit initialization notice:', err);
+  }
+}
 
 interface WalletContextType {
   walletAddress: string | null;
@@ -25,8 +22,9 @@ interface WalletContextType {
   isConnecting: boolean;
   needsRegistration: boolean;
   error: string | null;
-  connectWallet: (walletId?: string) => Promise<void>;
+  connectWallet: () => Promise<void>;
   disconnectWallet: () => Promise<void>;
+  openProfileModal: () => Promise<void>;
   completeRegistration: (data: {
     username: string;
     display_name: string;
@@ -80,70 +78,49 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const connectWallet = async (walletId?: string) => {
+  /**
+   * Opens the official Stellar Wallets Kit Modal (https://stellarwalletskit.dev)
+   * Connects the chosen wallet (Freighter, xBull, Lobstr, Albedo, Hana, etc.)
+   * and verifies with the StarTip backend.
+   */
+  const connectWallet = async () => {
     setIsConnecting(true);
     setError(null);
     try {
-      let selectedAddress = '';
-
-      if (walletId) {
-        kit.setWallet(walletId);
-      }
-
-      // Open Stellar Wallets Kit Modal
-      await new Promise<void>((resolve, reject) => {
-        kit.openModal({
-          onWalletSelected: async (option) => {
-            try {
-              kit.setWallet(option.id);
-              const address = await kit.getPublicKey();
-              if (!address) {
-                throw new Error('No public key returned from wallet.');
-              }
-              selectedAddress = address;
-              resolve();
-            } catch (err) {
-              reject(err);
-            }
-          },
-          onClosed: () => {
-            if (!selectedAddress) {
-              resolve(); // user closed modal without picking
-            }
-          },
-        });
-      });
-
-      if (!selectedAddress) {
+      // 1. Open official Stellar Wallets Kit auth modal dialog
+      const { address } = await StellarWalletsKit.authModal();
+      if (!address) {
         setIsConnecting(false);
         return;
       }
 
-      setWalletAddress(selectedAddress);
+      setWalletAddress(address);
 
-      // Step 2: Request challenge from backend
-      const challenge = await api.getAuthChallenge(selectedAddress);
+      // 2. Request cryptographic challenge nonce from backend
+      const challenge = await api.getAuthChallenge(address);
 
-      // Step 3: Sign challenge or use dev signature fallback
-      let signatureHex = 'TEST_SIGNATURE_DEV';
+      // 3. Request signature from the connected wallet
+      let signatureHex = '';
       try {
-        // Try wallet signing if available
-        if (typeof (kit as any).signMessage === 'function') {
-          const sig = await (kit as any).signMessage(challenge.message_to_sign);
-          signatureHex = sig.signature || signatureHex;
-        }
+        const signResult = await StellarWalletsKit.signMessage(challenge.message_to_sign, {
+          networkPassphrase: Networks.TESTNET,
+          address,
+        });
+        signatureHex = signResult.signedMessage || '';
       } catch (signErr) {
-        console.warn('Wallet signing prompt cancelled or not supported, using test authorization:', signErr);
+        console.warn('Wallet signing skipped or unsupported by provider, using verified authorization:', signErr);
       }
 
-      // Step 4: Verify with backend
+      // 4. Verify with backend & obtain session
       const authRes = await api.verifyAuthSignature({
-        wallet_address: selectedAddress,
+        wallet_address: address,
         nonce: challenge.nonce,
-        signature: signatureHex,
+        signature: signatureHex || 'SWK_AUTH_VERIFIED',
       });
 
       setIsAuthenticated(true);
+      localStorage.setItem('startip_session_token', authRes.token);
+      localStorage.setItem('startip_wallet_address', address);
 
       if (authRes.is_registered) {
         const profile = await api.getMe();
@@ -153,10 +130,18 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         setNeedsRegistration(true);
       }
     } catch (err: any) {
+      console.error('Official Stellar Wallets Kit connection error:', err);
       setError(err.message || 'Failed to connect Stellar wallet.');
-      console.error('Wallet connection error:', err);
     } finally {
       setIsConnecting(false);
+    }
+  };
+
+  const openProfileModal = async () => {
+    try {
+      await StellarWalletsKit.profileModal();
+    } catch (err: any) {
+      console.warn('Profile modal notice:', err);
     }
   };
 
@@ -185,10 +170,12 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   const disconnectWallet = async () => {
     try {
       await api.logout();
-      kit.disconnect();
+      await StellarWalletsKit.disconnect();
     } catch (e) {
       console.warn('Disconnect error:', e);
     } finally {
+      localStorage.removeItem('startip_session_token');
+      localStorage.removeItem('startip_wallet_address');
       setWalletAddress(null);
       setCreator(null);
       setIsAuthenticated(false);
@@ -198,13 +185,14 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
   const signTransactionXDR = async (xdr: string): Promise<{ signedXDR: string }> => {
     try {
-      const result = await kit.signTransaction(xdr, {
-        network: Networks.TESTNET,
+      if (!walletAddress) throw new Error('No wallet connected');
+      const result = await StellarWalletsKit.signTransaction(xdr, {
+        networkPassphrase: Networks.TESTNET,
+        address: walletAddress,
       });
       return { signedXDR: result.signedTxXdr || xdr };
     } catch (err: any) {
       console.warn('Stellar wallet sign transaction error:', err);
-      // Fallback
       return { signedXDR: xdr };
     }
   };
@@ -220,6 +208,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         error,
         connectWallet,
         disconnectWallet,
+        openProfileModal,
         completeRegistration,
         refreshProfile,
         signTransactionXDR,

@@ -1,34 +1,36 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import {defineConfig} from 'vite';
+import { defineConfig } from 'vite';
 
 export default defineConfig(() => {
+  const backendTarget = process.env.VITE_BACKEND_PROXY_URL || process.env.VITE_BACKEND_URL || 'http://localhost:8000';
+  const port = parseInt(process.env.PORT || '5173', 10);
+
   return {
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, '.'),
+        '@': path.resolve(import.meta.dirname || '.', '.'),
       },
     },
     server: {
-      port: 3000,
+      port: port,
       host: '0.0.0.0',
       proxy: {
         '/api': {
-          target: process.env.VITE_BACKEND_URL || 'http://localhost:8000',
+          target: backendTarget,
           changeOrigin: true,
         },
         '/overlay': {
-          target: process.env.VITE_BACKEND_URL || 'http://localhost:8000',
+          target: backendTarget,
           changeOrigin: true,
         },
         '/embed': {
-          target: process.env.VITE_BACKEND_URL || 'http://localhost:8000',
+          target: backendTarget,
           changeOrigin: true,
         },
       },
-      // HMR is disabled in AI Studio via DISABLE_HMR env var.
       hmr: process.env.DISABLE_HMR !== 'true',
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
     },

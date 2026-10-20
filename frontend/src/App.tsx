@@ -11,7 +11,14 @@ function AppContent() {
   const [currentPage, setCurrentPage] = useState<AppPage>('landing');
   const [demoInitialStep, setDemoInitialStep] = useState<DemoStepState>('01_pick');
   const [walletModalOpen, setWalletModalOpen] = useState(false);
-  const { isAuthenticated, creator } = useWallet();
+  const { isAuthenticated, creator, needsRegistration } = useWallet();
+
+  // If newly connected wallet requires registration, open profile modal
+  useEffect(() => {
+    if (needsRegistration) {
+      setWalletModalOpen(true);
+    }
+  }, [needsRegistration]);
 
   // If user visits ?creator=username or /tip/username
   const [publicCreatorUser, setPublicCreatorUser] = useState<string | null>(null);

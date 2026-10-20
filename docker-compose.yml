@@ -1,79 +1,197 @@
 services:
-  web:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: startip-backend
+  db:
+    image: postgres:16-alpine
+    container_name: startip_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-startip_db}
+      POSTGRES_USER: ${POSTGRES_USER:-startip_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-startip_secret}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-startip_user} -d ${POSTGRES_DB:-startip_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: startip_redis
     restart: unless-stopped
     ports:
-      - "${PORT:-8000}:8000"
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: startip_web
+    restart: unless-stopped
+    command: python manage.py runserver 0.0.0.0:8000
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - media_data:/app/media
+    env_file:
+      - path: .env
+        required: false
     environment:
-      - DJANGO_DEBUG=${DJANGO_DEBUG:-False}
-      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:-dokploy-production-super-secret-key-change-me}
+      - DJANGO_DEBUG=${DJANGO_DEBUG:-True}
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:-dokploy-production-super-secret-key}
       - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS:-*}
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-startip}:${POSTGRES_PASSWORD:-startippassword}@db:5432/${POSTGRES_DB:-startip}
       - POSTGRES_HOST=db
       - POSTGRES_PORT=5432
-      - POSTGRES_DB=${POSTGRES_DB:-startip}
-      - POSTGRES_USER=${POSTGRES_USER:-startip}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-startippassword}
+      - POSTGRES_DB=${POSTGRES_DB:-startip_db}
+      - POSTGRES_USER=${POSTGRES_USER:-startip_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-startip_secret}
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - RUN_MIGRATIONS=true
+      - SEED_DEMO_DATA=${SEED_DEMO_DATA:-true}
       - STELLAR_NETWORK=${STELLAR_NETWORK:-TESTNET}
       - STELLAR_HORIZON_URL=${STELLAR_HORIZON_URL:-https://horizon-testnet.stellar.org}
       - STELLAR_SOROBAN_RPC_URL=${STELLAR_SOROBAN_RPC_URL:-https://soroban-testnet.stellar.org}
       - STELLAR_USDC_ISSUER=${STELLAR_USDC_ISSUER:-GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
-      - SEED_DEMO_DATA=${SEED_DEMO_DATA:-true}
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 20s
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.startip.rule=Host(`${DOMAIN:-localhost}`)"
-      - "traefik.http.routers.startip.entrypoints=websecure"
-      - "traefik.http.routers.startip.tls.certresolver=letsencrypt"
-      - "traefik.http.services.startip.loadbalancer.server.port=8000"
+      - "traefik.http.routers.startip-api.rule=Host(`${DOMAIN:-localhost}`) && (PathPrefix(`/api`) || PathPrefix(`/overlay`) || PathPrefix(`/embed`))"
+      - "traefik.http.routers.startip-api.entrypoints=websecure"
+      - "traefik.http.routers.startip-api.tls.certresolver=letsencrypt"
+      - "traefik.http.services.startip-api.loadbalancer.server.port=8000"
 
-  db:
-    image: postgres:16-alpine
-    container_name: startip-db
+  celery_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: startip_celery_worker
     restart: unless-stopped
+    command: celery -A startip_backend worker -l info
+    volumes:
+      - ./backend:/app
+      - media_data:/app/media
+    env_file:
+      - path: .env
+        required: false
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-startip}
-      POSTGRES_USER: ${POSTGRES_USER:-startip}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-startippassword}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-startip} -d ${POSTGRES_DB:-startip}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    ports:
-      - "5432:5432"
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB:-startip_db}
+      - POSTGRES_USER=${POSTGRES_USER:-startip_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-startip_secret}
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - RUN_MIGRATIONS=false
+      - STELLAR_NETWORK=${STELLAR_NETWORK:-TESTNET}
+      - STELLAR_HORIZON_URL=${STELLAR_HORIZON_URL:-https://horizon-testnet.stellar.org}
+      - STELLAR_SOROBAN_RPC_URL=${STELLAR_SOROBAN_RPC_URL:-https://soroban-testnet.stellar.org}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
-  redis:
-    image: redis:7-alpine
-    container_name: startip-redis
+  celery_beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: startip_celery_beat
     restart: unless-stopped
+    command: celery -A startip_backend beat -l info
     volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      - ./backend:/app
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB:-startip_db}
+      - POSTGRES_USER=${POSTGRES_USER:-startip_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-startip_secret}
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - RUN_MIGRATIONS=false
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  soroban_indexer:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: startip_soroban_indexer
+    restart: unless-stopped
+    command: python manage.py run_soroban_event_listener
+    volumes:
+      - ./backend:/app
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB:-startip_db}
+      - POSTGRES_USER=${POSTGRES_USER:-startip_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-startip_secret}
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - RUN_MIGRATIONS=false
+      - STELLAR_NETWORK=${STELLAR_NETWORK:-TESTNET}
+      - STELLAR_HORIZON_URL=${STELLAR_HORIZON_URL:-https://horizon-testnet.stellar.org}
+      - STELLAR_SOROBAN_RPC_URL=${STELLAR_SOROBAN_RPC_URL:-https://soroban-testnet.stellar.org}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: development
+    container_name: startip_frontend
+    restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "5173:5173"
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8000/api
+      - VITE_BACKEND_PROXY_URL=http://web:8000
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+    depends_on:
+      - web
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.startip-frontend.rule=Host(`${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.startip-frontend.entrypoints=websecure"
+      - "traefik.http.routers.startip-frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.startip-frontend.loadbalancer.server.port=5173"
 
 volumes:
   postgres_data:
   redis_data:
+  media_data:
+  frontend_node_modules:

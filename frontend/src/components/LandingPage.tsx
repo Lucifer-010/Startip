@@ -59,8 +59,16 @@ export function LandingPage({
   onOpenDashboard,
   onOpenWalletModal,
 }: LandingPageProps) {
-  const { walletAddress, creator, isAuthenticated, disconnect } = useWallet();
+  const { walletAddress, creator, isAuthenticated, disconnect, connectWallet } = useWallet();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const handleConnectWallet = async () => {
+    try {
+      await connectWallet();
+    } catch (err) {
+      onOpenWalletModal();
+    }
+  };
 
   // Interactive Hero Tip Card state
   const [heroCurrency, setHeroCurrency] = useState<'USDC' | 'XLM'>('USDC');
@@ -218,7 +226,7 @@ export function LandingPage({
                   <button
                     onClick={() => {
                       setMobileMenuOpen(false);
-                      onOpenWalletModal();
+                      handleConnectWallet();
                     }}
                     className="w-full h-[52px] rounded-full border border-white/[0.24] font-semibold text-[15px] text-white flex items-center justify-center"
                   >
@@ -227,7 +235,7 @@ export function LandingPage({
                   <button
                     onClick={() => {
                       setMobileMenuOpen(false);
-                      onOpenWalletModal();
+                      handleConnectWallet();
                     }}
                     className="w-full h-[52px] rounded-full bg-[#C6FF3D] font-semibold text-[15px] text-[#0B1026] flex items-center justify-center gap-2.5"
                   >
@@ -344,13 +352,13 @@ export function LandingPage({
             ) : (
               <>
                 <button
-                  onClick={onOpenWalletModal}
+                  onClick={handleConnectWallet}
                   className="h-[42px] px-[18px] rounded-full border border-white/[0.18] hover:bg-white/[0.06] font-semibold text-[14px] leading-[18px] text-white transition cursor-pointer"
                 >
                   Log in
                 </button>
                 <button
-                  onClick={onOpenWalletModal}
+                  onClick={handleConnectWallet}
                   className="h-[42px] px-[18px] rounded-full bg-[#C6FF3D] hover:brightness-95 font-semibold text-[14px] leading-[18px] text-[#0B1026] transition cursor-pointer flex items-center gap-2"
                 >
                   <span>Start for free</span>
@@ -372,7 +380,7 @@ export function LandingPage({
               </button>
             ) : (
               <button
-                onClick={onOpenWalletModal}
+                onClick={handleConnectWallet}
                 className="h-[40px] px-4 rounded-full bg-[#C6FF3D] font-semibold text-[14px] leading-[18px] text-[#0B1026]"
               >
                 Start free
@@ -415,7 +423,7 @@ export function LandingPage({
           {/* Hero CTA Buttons */}
           <div className="mt-7 lg:mt-[36px] w-full max-w-[350px] sm:max-w-none flex flex-col sm:flex-row items-center justify-center gap-3">
             <button
-              onClick={isAuthenticated ? onOpenDashboard : onOpenWalletModal}
+              onClick={isAuthenticated ? onOpenDashboard : handleConnectWallet}
               className="w-full sm:w-auto h-[52px] px-[22px] rounded-full bg-[#C6FF3D] hover:brightness-95 font-semibold text-[15px] leading-[19px] text-[#0B1026] flex items-center justify-center gap-2.5 transition cursor-pointer"
             >
               <span>{isAuthenticated ? 'Open your dashboard' : 'Create your tip widget'}</span>
