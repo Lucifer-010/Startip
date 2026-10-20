@@ -1,0 +1,79 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: startip-backend
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8000}:8000"
+    environment:
+      - DJANGO_DEBUG=${DJANGO_DEBUG:-False}
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:-dokploy-production-super-secret-key-change-me}
+      - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS:-*}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-startip}:${POSTGRES_PASSWORD:-startippassword}@db:5432/${POSTGRES_DB:-startip}
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB:-startip}
+      - POSTGRES_USER=${POSTGRES_USER:-startip}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-startippassword}
+      - STELLAR_NETWORK=${STELLAR_NETWORK:-TESTNET}
+      - STELLAR_HORIZON_URL=${STELLAR_HORIZON_URL:-https://horizon-testnet.stellar.org}
+      - STELLAR_SOROBAN_RPC_URL=${STELLAR_SOROBAN_RPC_URL:-https://soroban-testnet.stellar.org}
+      - STELLAR_USDC_ISSUER=${STELLAR_USDC_ISSUER:-GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      - SEED_DEMO_DATA=${SEED_DEMO_DATA:-true}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.startip.rule=Host(`${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.startip.entrypoints=websecure"
+      - "traefik.http.routers.startip.tls.certresolver=letsencrypt"
+      - "traefik.http.services.startip.loadbalancer.server.port=8000"
+
+  db:
+    image: postgres:16-alpine
+    container_name: startip-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-startip}
+      POSTGRES_USER: ${POSTGRES_USER:-startip}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-startippassword}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-startip} -d ${POSTGRES_DB:-startip}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    container_name: startip-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "6379:6379"
+
+volumes:
+  postgres_data:
+  redis_data:
