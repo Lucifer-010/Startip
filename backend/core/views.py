@@ -27,6 +27,7 @@ class AuthChallengeView(APIView):
     Generates a cryptographically random challenge nonce for a given Stellar wallet.
     The wallet signs this challenge to prove ownership without transmitting private keys.
     """
+    authentication_classes = []
     permission_classes = [permissions.AllowAny]
 
     @extend_schema(
@@ -78,6 +79,7 @@ class AuthVerifyView(APIView):
     Verifies the cryptographic Ed25519 signature of the challenge message.
     If valid, returns an authenticated session token for API requests.
     """
+    authentication_classes = []
     permission_classes = [permissions.AllowAny]
 
     @extend_schema(

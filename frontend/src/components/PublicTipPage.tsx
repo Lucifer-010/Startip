@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import { StellarWalletsKit, Networks } from '@creit.tech/stellar-wallets-kit';
 import { api, CreatorProfile, WidgetConfig } from '../services/api';
+import { notificationService } from '../services/notificationService';
+import { formatAssetAmount } from '../utils/formatters';
 
 export function PublicTipPage() {
   const navigate = useNavigate();
@@ -242,6 +244,21 @@ export function PublicTipPage() {
       });
       setScreen('receipt');
 
+      // ⚡ Sound chime & Chrome notification
+      notificationService.playTipChime();
+      if (notificationService.isEnabled()) {
+        notificationService.showTipNotification({
+          id: txHash,
+          referenceId: paymentReq.reference_id,
+          supporterName: 'You',
+          amount: amount,
+          assetCode: asset,
+          message: `Tip to @${creator.username} confirmed on Stellar!`,
+          isTest: false,
+          stellarTxHash: txHash,
+        });
+      }
+
     } catch (err: any) {
       console.warn('Tip initiation error:', err);
       setScreen('form');
@@ -432,7 +449,7 @@ export function PublicTipPage() {
                 {/* Big Amount Readout */}
                 <div className="flex items-baseline justify-center gap-2 py-1">
                   <span className="font-extrabold text-5xl tracking-[-1.5px] text-[#0B1026] leading-none">
-                    {amount}
+                    {formatAssetAmount(amount)}
                   </span>
                   <span className="font-bold text-base text-[#646A8A]">
                     {asset}
@@ -541,7 +558,7 @@ export function PublicTipPage() {
                   disabled={isSubmitting}
                   className="w-full h-14 rounded-full bg-[#C6FF3D] hover:-translate-y-0.5 active:translate-y-0 px-2 pl-6 flex items-center justify-between text-[#0B1026] font-bold text-base transition-all duration-200 cursor-pointer shadow-[0px_10px_24px_rgba(198,255,61,0.45),0px_2px_4px_rgba(11,16,38,0.08)] hover:shadow-[0px_14px_32px_rgba(198,255,61,0.7),0px_4px_10px_rgba(11,16,38,0.12)] disabled:opacity-65 disabled:cursor-not-allowed disabled:transform-none"
                 >
-                  <span>Tip {amount} {asset}</span>
+                  <span>Tip {formatAssetAmount(amount)} {asset}</span>
                   <div className="w-10 h-10 rounded-full bg-[#0B1026] flex items-center justify-center flex-shrink-0">
                     <ArrowUpRight className="w-4 h-4 text-[#C6FF3D]" />
                   </div>
@@ -726,7 +743,7 @@ export function PublicTipPage() {
                   <div className="h-12 px-4 flex items-center justify-between border-b border-[#E4E7F2]">
                     <span className="text-sm text-[#4A5070]">Amount</span>
                     <span className="text-sm font-bold text-[#0B1026]">
-                      {receiptData.amount} {receiptData.asset}
+                      {formatAssetAmount(receiptData.amount)} {receiptData.asset}
                     </span>
                   </div>
 

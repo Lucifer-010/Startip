@@ -21,6 +21,7 @@ import {
 } from './Icons';
 import { useWallet } from '../context/WalletContext';
 import { api, CreatorProfile } from '../services/api';
+import { formatAssetAmount } from '../utils/formatters';
 
 export type DemoStepState = '01_pick' | '01b_message' | '02_sending' | '03_landed';
 
@@ -402,7 +403,7 @@ export function DemoWidgetPage({
                 Tip to {targetCreatorProfile?.display_name || targetCreatorProfile?.username || 'Creator'}
               </span>
               <span className="font-extrabold text-[16px] text-[#0B1026] tabular-nums">
-                {amount} {currency}
+                {formatAssetAmount(amount)} {currency}
               </span>
             </div>
 
@@ -471,7 +472,7 @@ export function DemoWidgetPage({
             </div>
             <div className="space-y-1">
               <h4 className="font-extrabold text-[24px] leading-[32px] tracking-[-0.5px] text-[#0B1026]">
-                {amount} {currency} sent to {targetCreatorProfile?.display_name || targetCreatorProfile?.username || 'Creator'}
+                {formatAssetAmount(amount)} {currency} sent to {targetCreatorProfile?.display_name || targetCreatorProfile?.username || 'Creator'}
               </h4>
               <p className="text-[14px] leading-[20px] text-[#4A5070] max-w-[300px]">
                 Thanks, {displaySenderName}. Your message is on {targetCreatorProfile?.display_name?.split(' ')[0] || 'the creator'}’s stream now.
@@ -609,7 +610,7 @@ export function DemoWidgetPage({
                       {displaySenderName} just tipped
                     </div>
                     <div className="font-anton text-[22px] sm:text-[30px] leading-tight tracking-[0.5px] text-[#0B1026]">
-                      {amount} {currency}
+                      {formatAssetAmount(amount)} {currency}
                     </div>
                     <div className="text-[11px] sm:text-[13px] text-[#4A5070] truncate">
                       “{displayMessage}”
@@ -674,7 +675,7 @@ export function DemoWidgetPage({
 
                   <div className="text-right shrink-0">
                     <div className="font-mono-code font-semibold text-[14px] text-[#0B1026] tabular-nums">
-                      {amount} {currency}
+                      {formatAssetAmount(amount)} {currency}
                     </div>
                     {isSending ? (
                       <span className="inline-block px-2 py-0.5 rounded-full bg-[#FDF1E1] text-[#8A4A06] text-[11px] font-bold">

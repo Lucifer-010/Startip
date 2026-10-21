@@ -1630,6 +1630,21 @@
       if (expBtn) expBtn.href = expUrl;
 
       showScreen('screenSuccess');
+
+      // ⚡ Desktop Chrome notification and parent notification
+      try {
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification('⚡ Tip Confirmed on Stellar!', {
+            body: `Your tip of ${amount} ${asset} was successfully sent and confirmed on ledger!`,
+            icon: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"><rect width="128" height="128" rx="28" fill="%230B1026"/><circle cx="64" cy="64" r="54" fill="none" stroke="%23C6FF3D" stroke-width="4" stroke-opacity="0.35"/><path d="M70 20 L38 72 L62 72 L58 108 L90 56 L66 56 Z" fill="%23C6FF3D"/></svg>',
+            tag: `startip-receipt-${txHash || Date.now()}`
+          });
+        }
+      } catch (e) {}
+
+      try {
+        window.parent.postMessage({ type: 'startip:tip_confirmed', amount: amount, asset: asset, txHash: txHash }, '*');
+      } catch (e) {}
     }
 
     function copyReceiptTx() {

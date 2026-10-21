@@ -52,6 +52,16 @@ class StellarWalletAuthentication(authentication.BaseAuthentication):
         return 'Bearer realm="StellarWallet"'
 
 
+class CsrfExemptSessionAuthentication(authentication.SessionAuthentication):
+    """
+    Session authentication scheme that relaxes CSRF enforcement for API endpoints.
+    Prevents ambient browser session cookies (e.g. Django Admin) from failing
+    cross-origin requests from SPA frontends or embeddable widgets with CSRF errors.
+    """
+    def enforce_csrf(self, request):
+        return
+
+
 class StellarWalletAuthenticationScheme(OpenApiAuthenticationExtension):
     """
     OpenAPI documentation generator for Stellar wallet authentication.

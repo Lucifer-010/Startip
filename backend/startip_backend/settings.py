@@ -157,7 +157,10 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 # Media files (user uploads for creator avatars & banners)
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
-(MEDIA_ROOT / 'uploads').mkdir(parents=True, exist_ok=True)
+try:
+    (MEDIA_ROOT / 'uploads').mkdir(parents=True, exist_ok=True)
+except Exception:
+    pass
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -177,12 +180,30 @@ CORS_ALLOW_HEADERS = [
     'x-wallet-token',
 ]
 
+# CSRF Trusted Origins (required in Django 4+ for cross-origin requests)
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'http://localhost:8000',
+    'http://127.0.0.1:8000',
+    'http://localhost:8080',
+    'http://127.0.0.1:8080',
+    'https://startip.app',
+    'https://*.startip.app',
+]
+
+_env_csrf = os.getenv('CSRF_TRUSTED_ORIGINS', '')
+if _env_csrf:
+    CSRF_TRUSTED_ORIGINS.extend([origin.strip() for origin in _env_csrf.split(',') if origin.strip()])
+
 # Django REST Framework Settings
 REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'core.auth.StellarWalletAuthentication',
-        'rest_framework.authentication.SessionAuthentication',
+        'core.auth.CsrfExemptSessionAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.AllowAny',

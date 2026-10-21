@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useWallet } from '../context/WalletContext';
 import { UsdcBadge, XlmBadge, StarFourPoint } from './Icons';
+import { formatAssetAmount } from '../utils/formatters';
 
 interface WalletProfileDropdownProps {
   theme?: 'dark' | 'light';
@@ -101,13 +102,14 @@ export function WalletProfileDropdown({
     .charAt(0)
     .toUpperCase();
 
-  // Active balance display for selected asset
-  const activeBalance =
+  // Active balance display for selected asset (formatted to 2 decimal places)
+  const rawActiveBalance =
     selectedAsset === 'XLM'
       ? balances.XLM
       : selectedAsset === 'USDC'
       ? balances.USDC
       : balances.USDT;
+  const activeBalance = formatAssetAmount(rawActiveBalance);
 
   return (
     <div className="relative inline-block text-left" ref={dropdownRef}>
@@ -292,7 +294,7 @@ export function WalletProfileDropdown({
                   <span>XLM</span>
                 </div>
                 <div className="mt-1 font-mono-code font-bold text-xs text-[#0B1026] truncate" title={balances.XLM}>
-                  {balances.XLM}
+                  {formatAssetAmount(balances.XLM)}
                 </div>
               </div>
 
@@ -310,7 +312,7 @@ export function WalletProfileDropdown({
                   <span>USDC</span>
                 </div>
                 <div className="mt-1 font-mono-code font-bold text-xs text-[#0B1026] truncate" title={balances.USDC}>
-                  {balances.USDC}
+                  {formatAssetAmount(balances.USDC)}
                 </div>
               </div>
 
@@ -330,7 +332,7 @@ export function WalletProfileDropdown({
                   <span>USDT</span>
                 </div>
                 <div className="mt-1 font-mono-code font-bold text-xs text-[#0B1026] truncate" title={balances.USDT}>
-                  {balances.USDT}
+                  {formatAssetAmount(balances.USDT)}
                 </div>
               </div>
             </div>

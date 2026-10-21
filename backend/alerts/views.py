@@ -25,9 +25,22 @@ class LiveAlertStreamView(APIView):
         responses={200: OpenApiResponse(description='SSE event stream')}
     )
     def get(self, request, overlay_token):
-        token_str = str(overlay_token)
-        if not WidgetConfig.objects.filter(overlay_token=token_str).exists():
-            return Response({'error': 'Invalid overlay token.'}, status=status.HTTP_404_NOT_FOUND)
+        token_str = str(overlay_token).strip()
+        import uuid
+        from creators.models import CreatorProfile, WidgetConfig
+        
+        config = None
+        try:
+            uuid.UUID(token_str)
+            config = WidgetConfig.objects.filter(overlay_token=token_str).first()
+        except (ValueError, TypeError):
+            config = None
+
+        if not config:
+            config = WidgetConfig.objects.filter(creator__username__iexact=token_str).first()
+
+        if not config and not CreatorProfile.objects.filter(username__iexact=token_str).exists():
+            return Response({'error': 'Invalid overlay token or creator handle.'}, status=status.HTTP_404_NOT_FOUND)
 
         def event_generator():
             q = AlertManager.subscribe(token_str)
@@ -117,13 +130,23 @@ class TriggerTestAlertView(APIView):
 def overlay_page_view(request, overlay_token):
     """
     Renders standalone transparent overlay webpage for OBS Browser Source.
+    Supports either widget overlay_token UUID or creator username.
     """
+    token_str = str(overlay_token).strip()
+    import uuid
+    config = None
     try:
-        config = WidgetConfig.objects.select_related('creator').get(overlay_token=str(overlay_token))
-    except WidgetConfig.DoesNotExist:
-        return HttpResponseNotFound("Invalid overlay token.")
+        uuid.UUID(token_str)
+        config = WidgetConfig.objects.select_related('creator').filter(overlay_token=token_str).first()
+    except (ValueError, TypeError):
+        config = None
+
+    if not config:
+        config = WidgetConfig.objects.select_related('creator').filter(creator__username__iexact=token_str).first()
+    if not config:
+        return HttpResponseNotFound("Invalid overlay token or creator handle.")
 
     return render(request, 'overlay.html', {
         'config': config,
-        'overlay_token': str(overlay_token),
+        'overlay_token': str(config.overlay_token),
     })

@@ -1,3 +1,4 @@
+import time
 import json
 import queue
 import logging
@@ -35,12 +36,8 @@ class AlertManager:
     @classmethod
     def publish_tip(cls, tip):
         """
-        Publishes confirmed on-chain tip event to overlay subscribers.
+        Publishes confirmed on-chain tip event to overlay and dashboard subscribers.
         """
-        if not hasattr(tip.creator, 'widget_config'):
-            return
-
-        token_str = str(tip.creator.widget_config.overlay_token)
         payload = {
             'event': 'tip',
             'is_test': False,
@@ -50,21 +47,42 @@ class AlertManager:
             'asset_code': tip.asset_code,
             'message': tip.message,
             'stellar_tx_hash': tip.stellar_tx_hash,
-            'duration_seconds': tip.creator.widget_config.alert_duration_seconds,
-            'sound_enabled': tip.creator.widget_config.alert_sound_enabled,
+            'duration_seconds': 6,
+            'sound_enabled': True,
         }
-        cls._broadcast(token_str, payload)
+
+        tokens_to_broadcast = set()
+
+        if hasattr(tip.creator, 'widget_config') and tip.creator.widget_config:
+            tokens_to_broadcast.add(str(tip.creator.widget_config.overlay_token))
+            payload['duration_seconds'] = tip.creator.widget_config.alert_duration_seconds
+            payload['sound_enabled'] = tip.creator.widget_config.alert_sound_enabled
+
+        try:
+            if hasattr(tip.creator, 'widgets'):
+                for w in tip.creator.widgets.all():
+                    if w.overlay_token:
+                        tokens_to_broadcast.add(str(w.overlay_token))
+        except Exception:
+            pass
+
+        if getattr(tip.creator, 'username', None):
+            tokens_to_broadcast.add(str(tip.creator.username).lower())
+            tokens_to_broadcast.add(str(tip.creator.username))
+
+        for token in tokens_to_broadcast:
+            cls._broadcast(token, payload)
 
     @classmethod
     def publish_test(cls, overlay_token: str, amount: str = '5', asset_code: str = 'USDC', supporter_name: str = 'Stellar Supporter', message: str = 'Keep building amazing things on Stellar!'):
         """
-        Publishes simulated test alert to verify OBS/Streamlabs overlay.
+        Publishes simulated test alert to verify OBS/Streamlabs overlay and Chrome notifications.
         """
         token_str = str(overlay_token)
         payload = {
             'event': 'tip',
             'is_test': True,
-            'reference_id': 'TEST-ALERT',
+            'reference_id': f'TEST-{int(time.time())}',
             'supporter_name': supporter_name,
             'amount': amount,
             'asset_code': asset_code,
@@ -74,6 +92,7 @@ class AlertManager:
             'sound_enabled': True,
         }
         cls._broadcast(token_str, payload)
+        cls._broadcast(token_str.lower(), payload)
 
     @classmethod
     def _broadcast(cls, token_str: str, payload: dict):

@@ -1,14 +1,57 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { StellarWalletsKit, Networks } from '@creit.tech/stellar-wallets-kit';
+import { StellarWalletsKit, Networks, ModuleType } from '@creit.tech/stellar-wallets-kit';
 import { defaultModules } from '@creit.tech/stellar-wallets-kit/modules/utils';
 import { api, CreatorProfile } from '../services/api';
+
+// Instant Testnet Faucet Module for 1-click testing on Stellar Testnet
+export class TestnetFaucetModule {
+  moduleType = ModuleType.HOT_WALLET;
+  productId = 'testnet_faucet';
+  productName = 'Instant Testnet Faucet';
+  productUrl = 'https://stellar.org';
+  productIcon = 'https://stellar.creit.tech/wallet-icons/albedo.png';
+  activeKeypair: any = null;
+
+  async isAvailable() {
+    return true;
+  }
+
+  async getAddress() {
+    const sdk = (window as any).StellarSdk;
+    if (!sdk) {
+      throw new Error('Stellar SDK is loading, please retry in a moment.');
+    }
+    const kp = sdk.Keypair.random();
+    this.activeKeypair = kp;
+    const pubKey = kp.publicKey();
+    try {
+      await fetch(`https://friendbot.stellar.org?addr=${pubKey}`);
+    } catch (e) {
+      console.warn('[StarTip] Friendbot funding notice:', e);
+    }
+    return { address: pubKey };
+  }
+
+  async signTransaction(xdr: string, opts?: any) {
+    if (!this.activeKeypair) {
+      throw new Error('No active keypair in Testnet Faucet module');
+    }
+    const sdk = (window as any).StellarSdk;
+    const passphrase = opts?.networkPassphrase || 'Test SDF Network ; September 2015';
+    const tx = new sdk.Transaction(xdr, passphrase);
+    tx.sign(this.activeKeypair);
+    return { signedTxXdr: tx.toXDR() };
+  }
+}
 
 // Initialize the official Stellar Wallets Kit globally for Stellar Testnet
 if (typeof window !== 'undefined') {
   try {
+    const modules: any[] = defaultModules();
+    modules.push(new TestnetFaucetModule());
     StellarWalletsKit.init({
       network: Networks.TESTNET,
-      modules: defaultModules(),
+      modules,
     });
   } catch (err) {
     console.warn('StellarWalletsKit initialization notice:', err);
