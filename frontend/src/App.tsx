@@ -12,6 +12,7 @@ import { LandingPage } from './components/LandingPage';
 import { DemoWidgetPage } from './components/DemoWidgetPage';
 import { CreatorDashboard } from './components/CreatorDashboard';
 import { WalletOnboardingModal } from './components/WalletOnboardingModal';
+import { PublicTipPage } from './components/PublicTipPage';
 import { WalletProvider, useWallet } from './context/WalletContext';
 import { Wallet, ArrowUpRight } from 'lucide-react';
 
@@ -116,20 +117,8 @@ function DemoRoute({ onOpenWalletModal }: { onOpenWalletModal: () => void }) {
   );
 }
 
-function CreatorSlugRoute({ onOpenWalletModal }: { onOpenWalletModal: () => void }) {
-  const navigate = useNavigate();
-  const { creatorUsername } = useParams<{ creatorUsername: string }>();
-
-  return (
-    <DemoWidgetPage
-      targetCreator={creatorUsername || 'tobibuilds'}
-      onBackToHome={() => {
-        navigate('/');
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      }}
-      onStartForFree={onOpenWalletModal}
-    />
-  );
+function CreatorSlugRoute() {
+  return <PublicTipPage />;
 }
 
 function AppContent() {
@@ -150,8 +139,8 @@ function AppContent() {
         <Route path="/" element={<LandingRoute onOpenWalletModal={() => setWalletModalOpen(true)} />} />
         <Route path="/dashboard" element={<DashboardRoute onOpenWalletModal={() => setWalletModalOpen(true)} />} />
         <Route path="/demo" element={<DemoRoute onOpenWalletModal={() => setWalletModalOpen(true)} />} />
-        <Route path="/tip/:creatorUsername" element={<CreatorSlugRoute onOpenWalletModal={() => setWalletModalOpen(true)} />} />
-        <Route path="/:creatorUsername" element={<CreatorSlugRoute onOpenWalletModal={() => setWalletModalOpen(true)} />} />
+        <Route path="/tip/:creatorUsername" element={<CreatorSlugRoute />} />
+        <Route path="/:creatorUsername" element={<CreatorSlugRoute />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 

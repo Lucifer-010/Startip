@@ -357,6 +357,7 @@ export function CreatorDashboard({
   // Unified Share & Embed modal state
   const [embedModalOpen, setEmbedModalOpen] = useState(false);
   const [embedModalTab, setEmbedModalTab] = useState<'share' | 'widget' | 'iframe' | 'obs'>('share');
+  const [embedWidgetSubTab, setEmbedWidgetSubTab] = useState<'float' | 'custom' | 'inline'>('float');
   const [embedTargetWidget, setEmbedTargetWidget] = useState<WidgetConfig | null>(null);
 
   // Post-save action modal state
@@ -634,6 +635,20 @@ export function CreatorDashboard({
     const slug = w?.slug;
     const slugParam = slug && slug !== 'main' && slug !== 'default' ? `?widget=${slug}` : '';
     return `<script src="${appBaseUrl}/embed/${effectiveHandle}/widget.js${slugParam}" async></script>`;
+  };
+
+  const getWidgetCustomButtonSnippet = (w?: WidgetConfig | null) => {
+    const slug = w?.slug;
+    const slugParam = slug && slug !== 'main' && slug !== 'default' ? `?widget=${slug}` : '';
+    const query = slugParam ? `${slugParam}&button=false` : '?button=false';
+    return `<!-- 1. Add data-startip-open to any custom button or link on your website -->\n<button data-startip-open class="my-tip-btn">\n  ⚡ Tip @${effectiveHandle}\n</button>\n\n<!-- 2. Embed the StarTip loader script -->\n<script src="${appBaseUrl}/embed/${effectiveHandle}/widget.js${query}" async></script>`;
+  };
+
+  const getWidgetInlineSnippet = (w?: WidgetConfig | null) => {
+    const slug = w?.slug;
+    const slugParam = slug && slug !== 'main' && slug !== 'default' ? `?widget=${slug}` : '';
+    const query = slugParam ? `${slugParam}&mode=inline` : '?mode=inline';
+    return `<!-- 1. Container div where the full tipping window will appear -->\n<div id="startip-widget"></div>\n\n<!-- 2. Embed the StarTip loader script -->\n<script src="${appBaseUrl}/embed/${effectiveHandle}/widget.js${query}" async></script>`;
   };
 
   const getWidgetIframeSnippet = (w?: WidgetConfig | null) => {
@@ -3975,42 +3990,162 @@ export function CreatorDashboard({
                     </div>
                   )}
 
-                  {/* Tab 2: Floating JS Widget */}
+                  {/* Tab 2: JS Widget & Embed Options */}
                   {embedModalTab === 'widget' && (
                     <div className="space-y-4">
-                      <div>
-                        <div className="font-extrabold text-sm text-[#0B1026]">
-                          Floating Corner Widget Script
-                        </div>
-                        <p className="text-xs text-[#646A8A] mt-0.5">
-                          Paste this one-line script snippet into your website's HTML before the closing <code className="text-[#6A4CF5]">&lt;/body&gt;</code> tag.
-                        </p>
+                      {/* Embed Mode Switcher */}
+                      <div className="grid grid-cols-3 gap-2 p-1.5 rounded-2xl bg-[#F6F7FB] border border-[#EEF0F7]">
+                        <button
+                          type="button"
+                          onClick={() => setEmbedWidgetSubTab('float')}
+                          className={`py-2 px-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                            embedWidgetSubTab === 'float'
+                              ? 'bg-white text-[#6A4CF5] shadow-sm'
+                              : 'text-[#646A8A] hover:text-[#0B1026]'
+                          }`}
+                        >
+                          <span>⚡ Floating Button</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEmbedWidgetSubTab('custom')}
+                          className={`py-2 px-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                            embedWidgetSubTab === 'custom'
+                              ? 'bg-white text-[#6A4CF5] shadow-sm'
+                              : 'text-[#646A8A] hover:text-[#0B1026]'
+                          }`}
+                        >
+                          <span>🎨 Custom Button</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEmbedWidgetSubTab('inline')}
+                          className={`py-2 px-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                            embedWidgetSubTab === 'inline'
+                              ? 'bg-white text-[#6A4CF5] shadow-sm'
+                              : 'text-[#646A8A] hover:text-[#0B1026]'
+                          }`}
+                        >
+                          <span>🪟 Inline Window</span>
+                        </button>
                       </div>
 
-                      <div className="p-4 rounded-2xl bg-[#0B1026] text-white space-y-3">
-                        <div className="flex items-center justify-between text-xs text-[#646A8A]">
-                          <span className="font-mono-code text-[#C6FF3D]">HTML snippet:</span>
-                          <button
-                            onClick={() => {
-                              navigator.clipboard?.writeText(getWidgetScriptSnippet(embedTargetWidget || selectedWidget));
-                              setCopiedEmbed(true);
-                              setTimeout(() => setCopiedEmbed(false), 2000);
-                            }}
-                            className="px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 text-[#C6FF3D] font-bold text-xs flex items-center gap-1.5 cursor-pointer"
-                          >
-                            {copiedEmbed ? <Check className="w-3 h-3 text-[#C6FF3D]" /> : <Copy className="w-3 h-3" />}
-                            <span>{copiedEmbed ? 'Copied Script!' : 'Copy Code'}</span>
-                          </button>
-                        </div>
-                        <pre className="font-mono-code text-xs text-white/90 overflow-x-auto p-2 bg-white/5 rounded-xl whitespace-pre-wrap break-all">
-                          {getWidgetScriptSnippet(embedTargetWidget || selectedWidget)}
-                        </pre>
-                      </div>
+                      {/* Sub-tab 1: Floating Corner Button */}
+                      {embedWidgetSubTab === 'float' && (
+                        <div className="space-y-3">
+                          <div>
+                            <div className="font-extrabold text-sm text-[#0B1026]">
+                              Floating Corner Button & Popup Modal (Default)
+                            </div>
+                            <p className="text-xs text-[#646A8A] mt-0.5">
+                              Displays a modern floating <code className="text-[#6A4CF5] font-bold">⚡ Tip @{effectiveHandle}</code> pill at the bottom-right corner of your site that smoothly opens the popup modal on click.
+                            </p>
+                          </div>
 
-                      <div className="p-3.5 rounded-xl bg-[#F4F1FF] border border-[#E4E7F2] text-xs text-[#6A4CF5] flex items-center gap-2">
-                        <Info className="w-4 h-4 shrink-0" />
-                        <span>The floating button will automatically match the branding and theme configured for this tip link.</span>
-                      </div>
+                          <div className="p-4 rounded-2xl bg-[#0B1026] text-white space-y-3">
+                            <div className="flex items-center justify-between text-xs text-[#646A8A]">
+                              <span className="font-mono-code text-[#C6FF3D]">HTML snippet:</span>
+                              <button
+                                onClick={() => {
+                                  navigator.clipboard?.writeText(getWidgetScriptSnippet(embedTargetWidget || selectedWidget));
+                                  setCopiedEmbed(true);
+                                  setTimeout(() => setCopiedEmbed(false), 2000);
+                                }}
+                                className="px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 text-[#C6FF3D] font-bold text-xs flex items-center gap-1.5 cursor-pointer"
+                              >
+                                {copiedEmbed ? <Check className="w-3 h-3 text-[#C6FF3D]" /> : <Copy className="w-3 h-3" />}
+                                <span>{copiedEmbed ? 'Copied Script!' : 'Copy Code'}</span>
+                              </button>
+                            </div>
+                            <pre className="font-mono-code text-xs text-white/90 overflow-x-auto p-2 bg-white/5 rounded-xl whitespace-pre-wrap break-all">
+                              {getWidgetScriptSnippet(embedTargetWidget || selectedWidget)}
+                            </pre>
+                          </div>
+
+                          <div className="p-3.5 rounded-xl bg-[#F4F1FF] border border-[#E4E7F2] text-xs text-[#6A4CF5] flex items-center gap-2">
+                            <Info className="w-4 h-4 shrink-0" />
+                            <span>Zero configuration required. Paste this script anywhere on your page and the button will appear automatically.</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Sub-tab 2: Custom Button */}
+                      {embedWidgetSubTab === 'custom' && (
+                        <div className="space-y-3">
+                          <div>
+                            <div className="font-extrabold text-sm text-[#0B1026]">
+                              Design Your Own Custom Button
+                            </div>
+                            <p className="text-xs text-[#646A8A] mt-0.5">
+                              Have your own website design? Simply add <code className="text-[#6A4CF5] font-bold">data-startip-open</code> to any button or link, and clicking it will open the StarTip popup modal!
+                            </p>
+                          </div>
+
+                          <div className="p-4 rounded-2xl bg-[#0B1026] text-white space-y-3">
+                            <div className="flex items-center justify-between text-xs text-[#646A8A]">
+                              <span className="font-mono-code text-[#C6FF3D]">Custom button code:</span>
+                              <button
+                                onClick={() => {
+                                  navigator.clipboard?.writeText(getWidgetCustomButtonSnippet(embedTargetWidget || selectedWidget));
+                                  setCopiedEmbed(true);
+                                  setTimeout(() => setCopiedEmbed(false), 2000);
+                                }}
+                                className="px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 text-[#C6FF3D] font-bold text-xs flex items-center gap-1.5 cursor-pointer"
+                              >
+                                {copiedEmbed ? <Check className="w-3 h-3 text-[#C6FF3D]" /> : <Copy className="w-3 h-3" />}
+                                <span>{copiedEmbed ? 'Copied Code!' : 'Copy Snippet'}</span>
+                              </button>
+                            </div>
+                            <pre className="font-mono-code text-xs text-white/90 overflow-x-auto p-2 bg-white/5 rounded-xl whitespace-pre-wrap break-all">
+                              {getWidgetCustomButtonSnippet(embedTargetWidget || selectedWidget)}
+                            </pre>
+                          </div>
+
+                          <div className="p-3.5 rounded-xl bg-[#F4F1FF] border border-[#E4E7F2] text-xs text-[#6A4CF5] flex items-center gap-2">
+                            <Info className="w-4 h-4 shrink-0" />
+                            <span>You can also trigger it programmatically anywhere in JavaScript with <code className="font-mono-code font-bold ml-1">window.StarTip.open()</code>.</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Sub-tab 3: Inline Window Embed */}
+                      {embedWidgetSubTab === 'inline' && (
+                        <div className="space-y-3">
+                          <div>
+                            <div className="font-extrabold text-sm text-[#0B1026]">
+                              Embed Window Directly into Page Layout
+                            </div>
+                            <p className="text-xs text-[#646A8A] mt-0.5">
+                              Renders the interactive tipping card directly inline in your blog post, sidebar, or support section.
+                            </p>
+                          </div>
+
+                          <div className="p-4 rounded-2xl bg-[#0B1026] text-white space-y-3">
+                            <div className="flex items-center justify-between text-xs text-[#646A8A]">
+                              <span className="font-mono-code text-[#C6FF3D]">Inline snippet:</span>
+                              <button
+                                onClick={() => {
+                                  navigator.clipboard?.writeText(getWidgetInlineSnippet(embedTargetWidget || selectedWidget));
+                                  setCopiedEmbed(true);
+                                  setTimeout(() => setCopiedEmbed(false), 2000);
+                                }}
+                                className="px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 text-[#C6FF3D] font-bold text-xs flex items-center gap-1.5 cursor-pointer"
+                              >
+                                {copiedEmbed ? <Check className="w-3 h-3 text-[#C6FF3D]" /> : <Copy className="w-3 h-3" />}
+                                <span>{copiedEmbed ? 'Copied Inline Code!' : 'Copy Code'}</span>
+                              </button>
+                            </div>
+                            <pre className="font-mono-code text-xs text-white/90 overflow-x-auto p-2 bg-white/5 rounded-xl whitespace-pre-wrap break-all">
+                              {getWidgetInlineSnippet(embedTargetWidget || selectedWidget)}
+                            </pre>
+                          </div>
+
+                          <div className="p-3.5 rounded-xl bg-[#F4F1FF] border border-[#E4E7F2] text-xs text-[#6A4CF5] flex items-center gap-2">
+                            <Info className="w-4 h-4 shrink-0" />
+                            <span>The widget will automatically center and fit cleanly inside <code className="font-mono-code font-bold ml-1">&lt;div id="startip-widget"&gt;</code>.</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 

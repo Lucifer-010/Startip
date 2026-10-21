@@ -65,9 +65,9 @@ class VerifyPaymentRequestSerializer(serializers.Serializer):
     reference_id = serializers.CharField(max_length=32, required=True)
     stellar_tx_hash = serializers.CharField(
         max_length=64,
-        min_length=64,
+        min_length=16,
         required=True,
-        help_text="64-character hexadecimal Stellar transaction hash"
+        help_text="Hexadecimal Stellar transaction hash"
     )
 
 

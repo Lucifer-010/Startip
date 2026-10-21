@@ -13,6 +13,7 @@ from drf_spectacular.views import (
 from alerts.views import overlay_page_view
 from .views import (
     embed_widget_view,
+    embed_widget_js_view,
     demo_page_view,
     spa_index_view,
     get_frontend_dist_dir,
@@ -37,8 +38,12 @@ urlpatterns = [
     path('', include('alerts.urls')),
     path('api/', include('ai_services.urls')),
 
-    # Embed & Standalone Views
-    path('embed/<str:username>/', embed_widget_view, name='embed-widget'),
+    # Embed & Standalone Script/Widget Views
+    re_path(r'^embed/(?P<username>[a-zA-Z0-9_\-\.]+)/widget\.js$', embed_widget_js_view, name='embed-widget-js-user'),
+    re_path(r'^embed/widget\.js$', embed_widget_js_view, name='embed-widget-js'),
+    re_path(r'^static/widget\.js$', embed_widget_js_view, name='embed-widget-js-static'),
+    re_path(r'^embed/(?P<username>[a-zA-Z0-9_\-\.]+)/?$', embed_widget_view, name='embed-widget'),
+    re_path(r'^tip/(?P<username>[a-zA-Z0-9_\-\.]+)/?$', embed_widget_view, name='direct-tip-page'),
     path('demo-bench/', demo_page_view, name='demo-page'),
 ]
 
