@@ -38,10 +38,14 @@ class CreatorRegisterView(APIView):
     def post(self, request):
         wallet_address = request.wallet_address
 
-        if CreatorProfile.objects.filter(wallet_address=wallet_address).exists():
+        existing_creator = CreatorProfile.objects.filter(wallet_address=wallet_address).first()
+        if existing_creator:
+            serializer = CreatorRegistrationSerializer(existing_creator, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            creator = serializer.save()
             return Response(
-                {'error': 'A creator profile already exists for this Stellar wallet.'},
-                status=status.HTTP_409_CONFLICT
+                CreatorProfileSerializer(creator).data,
+                status=status.HTTP_200_OK
             )
 
         serializer = CreatorRegistrationSerializer(data=request.data)

@@ -85,6 +85,14 @@ class CreatorRegistrationSerializer(serializers.ModelSerializer):
             'supported_assets',
         ]
 
+    def validate_website_url(self, value):
+        if value:
+            val = value.strip()
+            if not val.startswith(('http://', 'https://')):
+                val = f"https://{val}"
+            return val
+        return value
+
     def validate_receiving_wallet_address(self, value):
         if value and not is_valid_stellar_address(value):
             raise serializers.ValidationError("Invalid Stellar receiving wallet address.")

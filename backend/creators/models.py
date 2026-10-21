@@ -35,8 +35,8 @@ class CreatorProfile(models.Model):
     )
     display_name = models.CharField(max_length=100)
     bio = models.TextField(max_length=500, blank=True, default='')
-    avatar_url = models.CharField(max_length=1000, blank=True, default='')
-    banner_url = models.CharField(max_length=1000, blank=True, default='')
+    avatar_url = models.TextField(blank=True, default='')
+    banner_url = models.TextField(blank=True, default='')
     website_url = models.URLField(max_length=500, blank=True, default='')
     social_links = models.JSONField(default=dict, blank=True)
     receiving_wallet_address = models.CharField(
@@ -97,14 +97,12 @@ class WidgetConfig(models.Model):
         default='main',
         help_text="Unique slug for this widget link under the creator (e.g. /tip/tobibuilds/youtube)"
     )
-    avatar_url = models.CharField(
-        max_length=1000,
+    avatar_url = models.TextField(
         blank=True,
         default='',
         help_text="Custom avatar/logo for this specific tip link"
     )
-    banner_url = models.CharField(
-        max_length=1000,
+    banner_url = models.TextField(
         blank=True,
         default='',
         help_text="Custom banner/cover image for this specific tip link"

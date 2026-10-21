@@ -72,7 +72,7 @@ interface WalletContextType {
   };
   isLoadingBalances: boolean;
   refreshBalances: (addr?: string) => Promise<void>;
-  connectWallet: () => Promise<{ address: string; is_registered: boolean } | null>;
+  connectWallet: (walletId?: string) => Promise<{ address: string; is_registered: boolean } | null>;
   disconnectWallet: () => Promise<void>;
   disconnect: () => Promise<void>;
   openProfileModal: () => Promise<void>;
@@ -80,7 +80,9 @@ interface WalletContextType {
     username: string;
     display_name: string;
     bio?: string;
+    avatar_url?: string;
     website_url?: string;
+    supported_assets?: string[];
   }) => Promise<CreatorProfile>;
   refreshProfile: () => Promise<void>;
   signTransactionXDR: (xdr: string) => Promise<{ signedXDR: string }>;
@@ -140,8 +142,14 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
           setCreator(profile);
           setNeedsRegistration(false);
         })
-        .catch(() => {
-          // Session expired or invalid
+        .catch((err) => {
+          const msg = (err?.message || String(err)).toLowerCase();
+          if (msg.includes('404') || msg.includes('not found') || msg.includes('no creator profile')) {
+            setNeedsRegistration(true);
+            setCreator(null);
+            return;
+          }
+          // Only invalidate session if token is truly rejected (e.g. 401)
           localStorage.removeItem('startip_session_token');
           localStorage.removeItem('startip_wallet_address');
           setIsAuthenticated(false);
@@ -166,10 +174,18 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
    * Connects the chosen wallet (Freighter, xBull, Lobstr, Albedo, Hana, etc.)
    * and verifies with the StarTip backend.
    */
-  const connectWallet = async () => {
+  const connectWallet = async (walletId?: string) => {
     setIsConnecting(true);
     setError(null);
     try {
+      if (walletId) {
+        try {
+          StellarWalletsKit.setWallet(walletId);
+        } catch (e) {
+          console.warn('Set wallet notice:', e);
+        }
+      }
+
       // 1. Open official Stellar Wallets Kit auth modal dialog
       const authResult = await StellarWalletsKit.authModal();
       const address = authResult?.address;
@@ -177,8 +193,6 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         setIsConnecting(false);
         return null;
       }
-
-      setWalletAddress(address);
 
       // 2. Request cryptographic challenge nonce from backend
       const challenge = await api.getAuthChallenge(address);
@@ -191,7 +205,20 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
           address,
         });
         signatureHex = signResult?.signedMessage || '';
-      } catch (signErr) {
+      } catch (signErr: any) {
+        const msg = (signErr?.message || String(signErr)).toLowerCase();
+        if (
+          msg.includes('cancel') ||
+          msg.includes('decline') ||
+          msg.includes('reject') ||
+          msg.includes('denied') ||
+          msg.includes('closed') ||
+          signErr?.code === -1
+        ) {
+          console.log('[StarTip] User cancelled/rejected wallet signature request.');
+          setIsConnecting(false);
+          return null;
+        }
         console.warn('Wallet signing skipped or unsupported by provider, using verified authorization:', signErr);
       }
 
@@ -202,6 +229,8 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         signature: signatureHex || 'SWK_AUTH_VERIFIED',
       });
 
+      // 5. Only NOW set walletAddress and authenticated state!
+      setWalletAddress(address);
       setIsAuthenticated(true);
       localStorage.setItem('startip_session_token', authRes.token);
       localStorage.setItem('startip_wallet_address', address);
@@ -217,7 +246,16 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       refreshBalances(address);
       return { address, is_registered: authRes.is_registered };
     } catch (err: any) {
-      if (err?.message?.includes('closed the modal') || err?.code === -1) {
+      const msg = (err?.message || String(err)).toLowerCase();
+      if (
+        msg.includes('closed the modal') ||
+        msg.includes('user closed') ||
+        msg.includes('cancel') ||
+        msg.includes('decline') ||
+        msg.includes('reject') ||
+        err?.code === -1
+      ) {
+        setIsConnecting(false);
         return null;
       }
       console.error('Official Stellar Wallets Kit connection error:', err);
@@ -240,14 +278,16 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     username: string;
     display_name: string;
     bio?: string;
+    avatar_url?: string;
     website_url?: string;
+    supported_assets?: string[];
   }): Promise<CreatorProfile> => {
     setError(null);
     try {
       const newProfile = await api.registerCreator({
         ...data,
         receiving_wallet_address: walletAddress || undefined,
-        supported_assets: ['XLM', 'USDC'],
+        supported_assets: data.supported_assets && data.supported_assets.length > 0 ? data.supported_assets : ['XLM', 'USDC'],
       });
       setCreator(newProfile);
       setNeedsRegistration(false);

@@ -121,6 +121,21 @@ function CreatorSlugRoute() {
   return <PublicTipPage />;
 }
 
+function SignupRoute() {
+  const navigate = useNavigate();
+  return (
+    <WalletOnboardingModal
+      isOpen={true}
+      isStandalonePage={true}
+      onClose={() => navigate('/')}
+      onSuccess={() => {
+        navigate('/dashboard');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }}
+    />
+  );
+}
+
 function AppContent() {
   const [walletModalOpen, setWalletModalOpen] = useState(false);
   const { needsRegistration } = useWallet();
@@ -137,6 +152,8 @@ function AppContent() {
     <div className="min-h-screen bg-[#070A1A]">
       <Routes>
         <Route path="/" element={<LandingRoute onOpenWalletModal={() => setWalletModalOpen(true)} />} />
+        <Route path="/signup" element={<SignupRoute />} />
+        <Route path="/onboarding" element={<SignupRoute />} />
         <Route path="/dashboard" element={<DashboardRoute onOpenWalletModal={() => setWalletModalOpen(true)} />} />
         <Route path="/demo" element={<DemoRoute onOpenWalletModal={() => setWalletModalOpen(true)} />} />
         <Route path="/tip/:creatorUsername" element={<CreatorSlugRoute />} />

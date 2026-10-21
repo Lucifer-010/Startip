@@ -54,7 +54,7 @@ export function WalletLogo({
   name,
   size = 30,
 }: {
-  name: 'freighter' | 'lobstr' | 'xbull' | 'albedo' | 'walletconnect';
+  name: 'freighter' | 'lobstr' | 'xbull' | 'albedo' | 'hana' | 'walletconnect';
   size?: number;
 }) {
   const radius = size >= 40 ? 'rounded-[12px]' : size >= 28 ? 'rounded-[8px]' : 'rounded-[6px]';
@@ -108,6 +108,18 @@ export function WalletLogo({
           <polygon points="12,4 20,19 4,19" stroke="#FFFFFF" strokeWidth="2.2" fill="none" strokeLinejoin="round" />
           <circle cx="12" cy="14" r="2" fill="#FFFFFF" />
         </svg>
+      </div>
+    );
+  }
+  if (name === 'hana') {
+    return (
+      <div
+        style={{ width: size, height: size }}
+        className={`${radius} bg-[#FDECEC] border border-[#F8C8C8] flex items-center justify-center shrink-0`}
+      >
+        <span className="font-sans font-extrabold text-[16px] leading-none text-[#A61B1B]">
+          H
+        </span>
       </div>
     );
   }

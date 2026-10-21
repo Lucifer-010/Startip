@@ -136,17 +136,54 @@ function getAuthHeader(): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+function extractErrorMessage(errJson: any, status: number): string {
+  if (!errJson) return `Request failed with status ${status}`;
+  if (typeof errJson === 'string') return errJson;
+
+  let target = errJson.error?.detail ?? errJson.error ?? errJson.detail ?? errJson;
+
+  if (target && typeof target === 'object' && target.detail && typeof target.detail !== 'object') {
+    target = target.detail;
+  }
+
+  if (typeof target === 'string') return target;
+
+  if (Array.isArray(target)) {
+    return target.map((item) => (typeof item === 'string' ? item : JSON.stringify(item))).join(' ');
+  }
+
+  if (typeof target === 'object' && target !== null) {
+    const messages: string[] = [];
+    for (const [key, val] of Object.entries(target)) {
+      if (key === 'type' || key === 'status_code' || key === 'success') continue;
+      const formattedKey =
+        key === 'non_field_errors' || key === 'detail' || key === 'error' ? '' : `${key.replace(/_/g, ' ')}: `;
+      if (Array.isArray(val)) {
+        messages.push(`${formattedKey}${val.map((v) => (typeof v === 'string' ? v : JSON.stringify(v))).join(', ')}`);
+      } else if (typeof val === 'string') {
+        messages.push(`${formattedKey}${val}`);
+      } else if (val && typeof val === 'object') {
+        messages.push(`${formattedKey}${extractErrorMessage(val, status)}`);
+      }
+    }
+    if (messages.length > 0) {
+      return messages.join('. ');
+    }
+  }
+
+  try {
+    return JSON.stringify(errJson);
+  } catch {
+    return `Request failed with status ${status}`;
+  }
+}
+
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
     let errorDetail = `Request failed with status ${res.status}`;
     try {
       const errJson = await res.json();
-      errorDetail =
-        errJson.error?.detail?.detail ||
-        errJson.error?.detail ||
-        (typeof errJson.error === 'string' ? errJson.error : JSON.stringify(errJson.error)) ||
-        errJson.detail ||
-        errorDetail;
+      errorDetail = extractErrorMessage(errJson, res.status);
     } catch {
       // fallback
     }
@@ -231,6 +268,7 @@ export const api = {
     username: string;
     display_name: string;
     bio?: string;
+    avatar_url?: string;
     website_url?: string;
     receiving_wallet_address?: string;
     supported_assets?: string[];
