@@ -74,10 +74,20 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=dokploy-network"
-      - "traefik.http.routers.startip-api.rule=Host(`${API_DOMAIN:-api.startip.app}`) || (Host(`${FRONTEND_DOMAIN:-startip.app}`) && (PathPrefix(`/api`) || PathPrefix(`/admin`) || PathPrefix(`/overlay`) || PathPrefix(`/embed`) || PathPrefix(`/media`) || PathPrefix(`/static`)))"
-      - "traefik.http.routers.startip-api.entrypoints=websecure"
+      # Dedicated API Domain (api.startip.app)
+      - "traefik.http.routers.startip-api.rule=Host(`${API_DOMAIN:-api.startip.app}`)"
+      - "traefik.http.routers.startip-api.entrypoints=web,websecure"
       - "traefik.http.routers.startip-api.tls=true"
       - "traefik.http.routers.startip-api.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.startip-api.service=startip-api"
+      - "traefik.http.routers.startip-api.priority=100"
+      # API and backend static paths on Frontend Domain (startip.app/api, /admin, etc.)
+      - "traefik.http.routers.startip-backend-paths.rule=(Host(`${FRONTEND_DOMAIN:-startip.app}`) || Host(`www.${FRONTEND_DOMAIN:-startip.app}`)) && (PathPrefix(`/api`) || PathPrefix(`/admin`) || PathPrefix(`/overlay`) || PathPrefix(`/embed`) || PathPrefix(`/media`) || PathPrefix(`/static`))"
+      - "traefik.http.routers.startip-backend-paths.entrypoints=web,websecure"
+      - "traefik.http.routers.startip-backend-paths.tls=true"
+      - "traefik.http.routers.startip-backend-paths.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.startip-backend-paths.service=startip-api"
+      - "traefik.http.routers.startip-backend-paths.priority=100"
       - "traefik.http.services.startip-api.loadbalancer.server.port=8000"
 
   celery_worker:
@@ -186,7 +196,16 @@ services:
         VITE_VPS_IP: ${VITE_VPS_IP:-}
     restart: unless-stopped
     expose:
+      - "80"
       - "3000"
+    depends_on:
+      - web
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:80/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
     networks:
       - internal
       - dokploy-network
@@ -194,10 +213,12 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=dokploy-network"
       - "traefik.http.routers.startip-frontend.rule=Host(`${FRONTEND_DOMAIN:-startip.app}`) || Host(`www.${FRONTEND_DOMAIN:-startip.app}`)"
-      - "traefik.http.routers.startip-frontend.entrypoints=websecure"
+      - "traefik.http.routers.startip-frontend.entrypoints=web,websecure"
       - "traefik.http.routers.startip-frontend.tls=true"
       - "traefik.http.routers.startip-frontend.tls.certresolver=letsencrypt"
-      - "traefik.http.services.startip-frontend.loadbalancer.server.port=3000"
+      - "traefik.http.routers.startip-frontend.service=startip-frontend"
+      - "traefik.http.routers.startip-frontend.priority=10"
+      - "traefik.http.services.startip-frontend.loadbalancer.server.port=80"
 
 volumes:
   postgres_data:
