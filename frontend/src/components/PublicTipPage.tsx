@@ -10,7 +10,8 @@ import {
   Info,
   ShieldCheck,
   Sparkles,
-  AlertCircle
+  AlertCircle,
+  Bell
 } from 'lucide-react';
 import { StellarWalletsKit, Networks } from '@creit.tech/stellar-wallets-kit';
 import { api, CreatorProfile, WidgetConfig } from '../services/api';
@@ -148,6 +149,15 @@ export function PublicTipPage() {
       }
     }
 
+    // Request desktop notification permission during user click gesture
+    if (notificationService.isSupported() && notificationService.getPermission() === 'default') {
+      try {
+        notificationService.requestPermission();
+      } catch (e) {
+        // non-blocking
+      }
+    }
+
     setIsSubmitting(true);
     setAwaitingStep(1);
     setAwaitingHeading('Sign in your wallet');
@@ -246,18 +256,16 @@ export function PublicTipPage() {
 
       // ⚡ Sound chime & Chrome notification
       notificationService.playTipChime();
-      if (notificationService.isEnabled()) {
-        notificationService.showTipNotification({
-          id: txHash,
-          referenceId: paymentReq.reference_id,
-          supporterName: 'You',
-          amount: amount,
-          assetCode: asset,
-          message: `Tip to @${creator.username} confirmed on Stellar!`,
-          isTest: false,
-          stellarTxHash: txHash,
-        });
-      }
+      notificationService.showTipNotification({
+        id: txHash,
+        referenceId: paymentReq.reference_id,
+        supporterName: 'You',
+        amount: amount,
+        assetCode: asset,
+        message: `Tip to @${creator.username} confirmed on Stellar!`,
+        isTest: false,
+        stellarTxHash: txHash,
+      });
 
     } catch (err: any) {
       console.warn('Tip initiation error:', err);

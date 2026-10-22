@@ -472,6 +472,16 @@ export const api = {
     return handleResponse<TipHistoryItem[]>(res);
   },
 
+  async getCreatorTips(_handleOrWallet?: string): Promise<TipHistoryItem[]> {
+    try {
+      const history = await this.getTipHistory({ status: 'confirmed' });
+      return Array.isArray(history) ? history : [];
+    } catch (e) {
+      console.warn('Failed to fetch creator tips for diffing:', e);
+      return [];
+    }
+  },
+
   // --- Alerts & Overlay ---
   async triggerTestAlert(payload: {
     overlay_token: string;

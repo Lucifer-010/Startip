@@ -6,8 +6,10 @@
 
 import { formatAssetAmount } from '../utils/formatters';
 
-// StarTip Neon Bolt Icon SVG encoded as data URI for desktop notification popups
-export const STARTIP_NOTIFICATION_ICON = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"><rect width="128" height="128" rx="28" fill="%230B1026"/><circle cx="64" cy="64" r="54" fill="none" stroke="%23C6FF3D" stroke-width="4" stroke-opacity="0.35"/><path d="M70 20 L38 72 L62 72 L58 108 L90 56 L66 56 Z" fill="%23C6FF3D" filter="drop-shadow(0 0 12px %23C6FF3D)"/></svg>`;
+// StarTip Neon Bolt Icon PNG for Chrome desktop and mobile notification popups
+export const STARTIP_NOTIFICATION_ICON = typeof window !== 'undefined'
+  ? `${window.location.origin}/notification-icon.png`
+  : '/notification-icon.png';
 
 export interface TipNotificationData {
   id?: string;
@@ -177,6 +179,9 @@ class NotificationService {
 
     // Show Chrome / Desktop notification
     if (!this.isSupported() || Notification.permission !== 'granted') {
+      console.info(
+        `[StarTip Notifications] Desktop popup skipped: supported=${this.isSupported()}, permission=${this.getPermission()}`
+      );
       return null;
     }
 
@@ -196,15 +201,17 @@ class NotificationService {
       bodyText += `\n💬 "${data.message.trim()}"`;
     }
 
+    const options: NotificationOptions = {
+      body: bodyText,
+      icon: STARTIP_NOTIFICATION_ICON,
+      badge: STARTIP_NOTIFICATION_ICON,
+      tag: `startip-${tipKey}`,
+      requireInteraction: false,
+      silent: true, // We already synthesize the chime cleanly
+    };
+
     try {
-      const notif = new Notification(title, {
-        body: bodyText,
-        icon: STARTIP_NOTIFICATION_ICON,
-        badge: STARTIP_NOTIFICATION_ICON,
-        tag: `startip-${tipKey}`,
-        requireInteraction: false,
-        silent: true, // We already synthesize the chime cleanly
-      });
+      const notif = new Notification(title, options);
 
       notif.onclick = () => {
         window.focus();
@@ -213,7 +220,15 @@ class NotificationService {
 
       return notif;
     } catch (err) {
-      console.warn('Failed to show desktop notification:', err);
+      console.warn('Direct new Notification() failed, attempting ServiceWorker fallback:', err);
+      // Service worker fallback for Android Chrome or restricted environments
+      if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && navigator.serviceWorker.ready) {
+        navigator.serviceWorker.ready
+          .then((registration) => {
+            registration.showNotification(title, options);
+          })
+          .catch((swErr) => console.warn('ServiceWorker showNotification failed:', swErr));
+      }
       return null;
     }
   }

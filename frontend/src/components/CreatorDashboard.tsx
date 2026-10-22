@@ -2242,6 +2242,49 @@ export function CreatorDashboard({
           }`}
         >
           <div className="max-w-[1104px] mx-auto space-y-6">
+            {/* Notification Permission Callout Banner */}
+            {notifPermission !== 'granted' && (
+              <div
+                className={`p-4 rounded-2xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 transition-all shadow-sm ${
+                  isDark
+                    ? 'bg-gradient-to-r from-[#1A1A40] via-[#0F1430] to-[#0B1026] border-[#6A4CF5]/40 text-[#F3F4FA]'
+                    : 'bg-gradient-to-r from-[#F0EDFF] via-[#F6F7FB] to-white border-[#C7BAFF] text-[#0B1026]'
+                }`}
+              >
+                <div className="flex items-center gap-3.5">
+                  <div className="w-10 h-10 rounded-xl bg-[#6A4CF5] flex items-center justify-center text-[#C6FF3D] shrink-0 shadow-sm">
+                    <Bell className="w-5 h-5 animate-pulse" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-extrabold flex items-center gap-2">
+                      <span>Enable Chrome Tipping Alerts</span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#C6FF3D] text-[#0B1026]">Action Needed</span>
+                    </h4>
+                    <p className={`text-xs mt-0.5 leading-relaxed max-w-xl ${isDark ? 'text-[#8A91B4]' : 'text-[#646A8A]'}`}>
+                      Get instant Chrome desktop popups and audio chimes whenever someone sends a tip, even when StarTip is minimized or you are live streaming.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const perm = await notificationService.requestPermission();
+                      setNotifPermission(perm);
+                      if (perm === 'granted') {
+                        setDesktopNotifsEnabled(true);
+                        await notificationService.showTestNotification();
+                      }
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-[#C6FF3D] hover:brightness-95 active:scale-95 text-[#0B1026] text-xs font-extrabold flex items-center gap-1.5 transition cursor-pointer shadow-sm"
+                  >
+                    <Bell className="w-3.5 h-3.5" />
+                    <span>Enable Chrome Popups</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
             {activeTab === 'overview' && (
               <>
                 {/* Header Row */}

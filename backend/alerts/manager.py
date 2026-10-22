@@ -1,23 +1,39 @@
+import os
 import time
 import json
 import queue
 import logging
 from typing import Dict, List
+import redis
 
 logger = logging.getLogger(__name__)
 
+REDIS_URL = os.getenv('REDIS_URL') or os.getenv('CELERY_BROKER_URL') or 'redis://redis:6379/0'
+
 class AlertManager:
     """
-    In-memory Server-Sent Events (SSE) dispatcher for live streaming overlays.
+    Hybrid Redis Pub/Sub + In-memory Server-Sent Events (SSE) dispatcher for live streaming overlays.
     Routes events to specific browser source connections using overlay_token.
+    Enables instant multi-process / multi-worker tip broadcasting across Gunicorn, Celery, and Soroban Indexer.
     """
     # Map of overlay_token -> List of Queue objects for active SSE listeners
     _subscribers: Dict[str, List[queue.Queue]] = {}
+    _redis_client = None
+
+    @classmethod
+    def get_redis(cls):
+        if cls._redis_client is None:
+            try:
+                cls._redis_client = redis.Redis.from_url(REDIS_URL, decode_responses=True)
+            except Exception as e:
+                logger.warning(f"Could not initialize Redis client for AlertManager: {e}")
+                cls._redis_client = None
+        return cls._redis_client
 
     @classmethod
     def subscribe(cls, overlay_token: str) -> queue.Queue:
         q = queue.Queue(maxsize=50)
-        token_str = str(overlay_token)
+        token_str = str(overlay_token).strip()
         if token_str not in cls._subscribers:
             cls._subscribers[token_str] = []
         cls._subscribers[token_str].append(q)
@@ -26,7 +42,7 @@ class AlertManager:
 
     @classmethod
     def unsubscribe(cls, overlay_token: str, q: queue.Queue):
-        token_str = str(overlay_token)
+        token_str = str(overlay_token).strip()
         if token_str in cls._subscribers and q in cls._subscribers[token_str]:
             cls._subscribers[token_str].remove(q)
             if not cls._subscribers[token_str]:
@@ -36,7 +52,7 @@ class AlertManager:
     @classmethod
     def publish_tip(cls, tip):
         """
-        Publishes confirmed on-chain tip event to overlay and dashboard subscribers.
+        Publishes confirmed on-chain tip event to overlay and dashboard subscribers across all worker nodes.
         """
         payload = {
             'event': 'tip',
@@ -78,7 +94,7 @@ class AlertManager:
         """
         Publishes simulated test alert to verify OBS/Streamlabs overlay and Chrome notifications.
         """
-        token_str = str(overlay_token)
+        token_str = str(overlay_token).strip()
         payload = {
             'event': 'tip',
             'is_test': True,
@@ -96,8 +112,22 @@ class AlertManager:
 
     @classmethod
     def _broadcast(cls, token_str: str, payload: dict):
-        listeners = cls._subscribers.get(token_str, [])
-        logger.info(f"Broadcasting live alert to {len(listeners)} listeners for overlay {token_str[:8]}...")
+        token_clean = str(token_str).strip()
+        json_payload = json.dumps(payload)
+
+        # 1. Publish to Redis PubSub channel (reaches all Gunicorn workers and containers)
+        try:
+            r = cls.get_redis()
+            if r:
+                channel = f"startip:alerts:{token_clean.lower()}"
+                r.publish(channel, json_payload)
+                logger.info(f"Published alert to Redis channel '{channel}'")
+        except Exception as e:
+            logger.warning(f"Failed to publish alert to Redis: {e}")
+
+        # 2. Also publish to local in-memory listeners
+        listeners = cls._subscribers.get(token_clean, [])
+        logger.info(f"Broadcasting live alert to {len(listeners)} local listeners for overlay {token_clean[:8]}...")
         dead_queues = []
         for q in listeners:
             try:
@@ -106,4 +136,4 @@ class AlertManager:
                 dead_queues.append(q)
 
         for q in dead_queues:
-            cls.unsubscribe(token_str, q)
+            cls.unsubscribe(token_clean, q)

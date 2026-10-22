@@ -43,30 +43,78 @@ class LiveAlertStreamView(APIView):
             return Response({'error': 'Invalid overlay token or creator handle.'}, status=status.HTTP_404_NOT_FOUND)
 
         def event_generator():
-            q = AlertManager.subscribe(token_str)
-            # Initial connection handshake
-            yield f": connected to StarTip overlay {token_str[:8]}\n\n"
+            token_clean = token_str.lower()
+            yield f": connected to StarTip overlay {token_clean[:8]}\n\n"
+
+            # Connect Redis PubSub listener for multi-worker realtime events
+            redis_sub = None
+            try:
+                r = AlertManager.get_redis()
+                if r:
+                    redis_sub = r.pubsub(ignore_subscribe_messages=True)
+                    redis_sub.subscribe(f"startip:alerts:{token_clean}")
+                    if token_str != token_clean:
+                        redis_sub.subscribe(f"startip:alerts:{token_str}")
+            except Exception as err:
+                redis_sub = None
+
+            local_q = AlertManager.subscribe(token_str)
+
+            last_ping = time.time()
             try:
                 while True:
-                    try:
-                        # Wait up to 15 seconds for an alert
-                        alert_data = q.get(timeout=15.0)
-                        json_str = json.dumps(alert_data)
-                        yield f"event: {alert_data.get('event', 'tip')}\ndata: {json_str}\n\n"
-                    except queue.Empty:
-                        # Keep-alive heartbeat ping
+                    dispatched = False
+
+                    # Check Redis PubSub first
+                    if redis_sub:
+                        try:
+                            msg = redis_sub.get_message(timeout=1.0)
+                            if msg and msg.get('type') == 'message':
+                                raw_data = msg.get('data')
+                                alert_data = json.loads(raw_data) if isinstance(raw_data, str) else raw_data
+                                json_str = json.dumps(alert_data)
+                                yield f"event: {alert_data.get('event', 'tip')}\ndata: {json_str}\n\n"
+                                dispatched = True
+                        except Exception:
+                            pass
+
+                    # Check local in-memory queue fallback
+                    if not dispatched:
+                        try:
+                            alert_data = local_q.get(timeout=1.0)
+                            json_str = json.dumps(alert_data)
+                            yield f"event: {alert_data.get('event', 'tip')}\ndata: {json_str}\n\n"
+                            dispatched = True
+                        except queue.Empty:
+                            pass
+
+                    # Keep-alive heartbeat ping every 15s to prevent proxy timeouts
+                    if time.time() - last_ping >= 15.0:
                         yield ": ping\n\n"
+                        last_ping = time.time()
+
             except GeneratorExit:
-                AlertManager.unsubscribe(token_str, q)
+                if redis_sub:
+                    try:
+                        redis_sub.close()
+                    except Exception:
+                        pass
+                AlertManager.unsubscribe(token_str, local_q)
             finally:
-                AlertManager.unsubscribe(token_str, q)
+                if redis_sub:
+                    try:
+                        redis_sub.close()
+                    except Exception:
+                        pass
+                AlertManager.unsubscribe(token_str, local_q)
 
         response = StreamingHttpResponse(
             event_generator(),
             content_type='text/event-stream'
         )
-        response['Cache-Control'] = 'no-cache'
+        response['Cache-Control'] = 'no-cache, no-transform'
         response['X-Accel-Buffering'] = 'no'
+        response['Connection'] = 'keep-alive'
         return response
 
 
