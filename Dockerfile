@@ -11,7 +11,7 @@ WORKDIR /frontend
 
 # Cache npm dependencies layer
 COPY frontend/package*.json ./
-RUN npm ci --prefer-offline --no-audit
+RUN npm ci --legacy-peer-deps --prefer-offline --no-audit
 
 # Build Vite frontend bundle
 COPY frontend/ ./
@@ -52,8 +52,9 @@ COPY --from=frontend-builder /frontend/dist /app/frontend_dist
 RUN addgroup --system --gid 1001 startip && \
     adduser --system --uid 1001 --gid 1001 --home /home/startip startip && \
     chmod +x /app/docker-entrypoint.sh && \
-    mkdir -p /app/staticfiles && \
+    mkdir -p /app/staticfiles /app/media && \
     chown -R startip:startip /app /home/startip
+
 
 USER startip
 

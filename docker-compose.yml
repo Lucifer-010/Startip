@@ -1,14 +1,14 @@
+# Dokploy Production Docker Compose for StarTip Platform
+# Self-hosted PaaS deployment without Nginx (Traefik reverse proxy managed by Dokploy)
+
 services:
   db:
     image: postgres:16-alpine
-    container_name: startip_db
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-startip_db}
       POSTGRES_USER: ${POSTGRES_USER:-startip_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-startip_secret}
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -16,13 +16,12 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - internal
 
   redis:
     image: redis:7-alpine
-    container_name: startip_redis
     restart: unless-stopped
-    ports:
-      - "6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -30,27 +29,25 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - internal
 
   web:
     build:
-      context: ./backend
+      context: .
       dockerfile: Dockerfile
-    container_name: startip_web
     restart: unless-stopped
-    command: python manage.py runserver 0.0.0.0:8000
-    ports:
-      - "8000:8000"
+    command: gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 4 --timeout 120
+    expose:
+      - "8000"
     volumes:
-      - ./backend:/app
       - media_data:/app/media
     env_file:
       - path: .env
         required: false
     environment:
-      - DJANGO_DEBUG=${DJANGO_DEBUG:-True}
-      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:-dokploy-production-super-secret-key}
-      - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS:-*}
-      - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000,http://localhost:8000,http://127.0.0.1:8000,http://localhost:8080,http://127.0.0.1:8080,https://startip.app}
+      - DJANGO_SETTINGS_MODULE=${DJANGO_SETTINGS_MODULE:-config.settings.production}
+      - DJANGO_DEBUG=${DJANGO_DEBUG:-False}
       - POSTGRES_HOST=db
       - POSTGRES_PORT=5432
       - POSTGRES_DB=${POSTGRES_DB:-startip_db}
@@ -58,7 +55,7 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-startip_secret}
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
-      - RUN_MIGRATIONS=true
+      - RUN_MIGRATIONS=${RUN_MIGRATIONS:-true}
       - SEED_DEMO_DATA=${SEED_DEMO_DATA:-true}
       - STELLAR_NETWORK=${STELLAR_NETWORK:-TESTNET}
       - STELLAR_HORIZON_URL=${STELLAR_HORIZON_URL:-https://horizon-testnet.stellar.org}
@@ -71,27 +68,31 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    networks:
+      - internal
+      - dokploy-network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.startip-api.rule=Host(`${DOMAIN:-localhost}`) && (PathPrefix(`/api`) || PathPrefix(`/overlay`) || PathPrefix(`/embed`))"
+      - "traefik.docker.network=dokploy-network"
+      - "traefik.http.routers.startip-api.rule=Host(`${API_DOMAIN:-api.startip.app}`) || (Host(`${FRONTEND_DOMAIN:-startip.app}`) && (PathPrefix(`/api`) || PathPrefix(`/admin`) || PathPrefix(`/overlay`) || PathPrefix(`/embed`) || PathPrefix(`/media`) || PathPrefix(`/static`)))"
       - "traefik.http.routers.startip-api.entrypoints=websecure"
+      - "traefik.http.routers.startip-api.tls=true"
       - "traefik.http.routers.startip-api.tls.certresolver=letsencrypt"
       - "traefik.http.services.startip-api.loadbalancer.server.port=8000"
 
   celery_worker:
     build:
-      context: ./backend
+      context: .
       dockerfile: Dockerfile
-    container_name: startip_celery_worker
     restart: unless-stopped
-    command: celery -A startip_backend worker -l info
+    command: celery -A config worker -l info --concurrency=4
     volumes:
-      - ./backend:/app
       - media_data:/app/media
     env_file:
       - path: .env
         required: false
     environment:
+      - DJANGO_SETTINGS_MODULE=${DJANGO_SETTINGS_MODULE:-config.settings.production}
       - POSTGRES_HOST=db
       - POSTGRES_PORT=5432
       - POSTGRES_DB=${POSTGRES_DB:-startip_db}
@@ -109,22 +110,22 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    healthcheck:
-      disable: true
+    networks:
+      - internal
 
   celery_beat:
     build:
-      context: ./backend
+      context: .
       dockerfile: Dockerfile
-    container_name: startip_celery_beat
     restart: unless-stopped
-    command: celery -A startip_backend beat -l info
+    command: celery -A config beat -l info
     volumes:
-      - ./backend:/app
+      - media_data:/app/media
     env_file:
       - path: .env
         required: false
     environment:
+      - DJANGO_SETTINGS_MODULE=${DJANGO_SETTINGS_MODULE:-config.settings.production}
       - POSTGRES_HOST=db
       - POSTGRES_PORT=5432
       - POSTGRES_DB=${POSTGRES_DB:-startip_db}
@@ -138,22 +139,22 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    healthcheck:
-      disable: true
+    networks:
+      - internal
 
   soroban_indexer:
     build:
-      context: ./backend
+      context: .
       dockerfile: Dockerfile
-    container_name: startip_soroban_indexer
     restart: unless-stopped
     command: python manage.py run_soroban_event_listener
     volumes:
-      - ./backend:/app
+      - media_data:/app/media
     env_file:
       - path: .env
         required: false
     environment:
+      - DJANGO_SETTINGS_MODULE=${DJANGO_SETTINGS_MODULE:-config.settings.production}
       - POSTGRES_HOST=db
       - POSTGRES_PORT=5432
       - POSTGRES_DB=${POSTGRES_DB:-startip_db}
@@ -170,35 +171,40 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    healthcheck:
-      disable: true
+    networks:
+      - internal
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      target: development
-    container_name: startip_frontend
+      target: production
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-https://api.startip.app/api}
+        VITE_FRONTEND_URL: ${VITE_FRONTEND_URL:-https://startip.app}
+        VITE_VPS_IP: ${VITE_VPS_IP:-}
     restart: unless-stopped
-    ports:
-      - "5173:5173"
-    environment:
-      - VITE_API_BASE_URL=http://localhost:8000/api
-      - VITE_BACKEND_PROXY_URL=http://web:8000
-    volumes:
-      - ./frontend:/app
-      - frontend_node_modules:/app/node_modules
-    depends_on:
-      - web
+    expose:
+      - "3000"
+    networks:
+      - internal
+      - dokploy-network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.startip-frontend.rule=Host(`${DOMAIN:-localhost}`)"
+      - "traefik.docker.network=dokploy-network"
+      - "traefik.http.routers.startip-frontend.rule=Host(`${FRONTEND_DOMAIN:-startip.app}`) || Host(`www.${FRONTEND_DOMAIN:-startip.app}`)"
       - "traefik.http.routers.startip-frontend.entrypoints=websecure"
+      - "traefik.http.routers.startip-frontend.tls=true"
       - "traefik.http.routers.startip-frontend.tls.certresolver=letsencrypt"
-      - "traefik.http.services.startip-frontend.loadbalancer.server.port=5173"
+      - "traefik.http.services.startip-frontend.loadbalancer.server.port=3000"
 
 volumes:
   postgres_data:
   redis_data:
   media_data:
-  frontend_node_modules:
+
+networks:
+  dokploy-network:
+    external: true
+  internal:
+    driver: bridge

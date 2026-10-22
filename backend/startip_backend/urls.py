@@ -54,11 +54,17 @@ urlpatterns.append(
     re_path(r'^media/(?P<path>.*)$', serve, {'document_root': settings.MEDIA_ROOT})
 )
 
+def dynamic_assets_serve(request, path):
+    d = get_frontend_dist_dir()
+    if d and (d / 'assets').exists():
+        return serve(request, path, document_root=str(d / 'assets'))
+    return HttpResponseNotFound("Asset not found")
+
 # Serve compiled frontend static assets (/assets/...)
-if assets_dir:
-    urlpatterns.append(
-        re_path(r'^assets/(?P<path>.*)$', serve, {'document_root': assets_dir})
-    )
+urlpatterns.append(
+    re_path(r'^assets/(?P<path>.*)$', dynamic_assets_serve, name='frontend-assets')
+)
+
 
 # Root SPA & Catch-all client routes for SPA (e.g. /dashboard, /demo)
 urlpatterns.extend([

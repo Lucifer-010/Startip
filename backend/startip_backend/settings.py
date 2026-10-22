@@ -24,7 +24,8 @@ SECRET_KEY = os.getenv(
 
 DEBUG = os.getenv('DJANGO_DEBUG', 'True').lower() in ('true', '1', 'yes')
 
-ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS', '*').split(',')
+_raw_hosts = os.getenv('DJANGO_ALLOWED_HOSTS', 'startip.app,.startip.app,localhost,127.0.0.1,web,*')
+ALLOWED_HOSTS = [h.strip() for h in _raw_hosts.split(',') if h.strip()]
 
 # Application definition
 INSTALLED_APPS = [
@@ -182,6 +183,9 @@ CORS_ALLOW_HEADERS = [
 
 # CSRF Trusted Origins (required in Django 4+ for cross-origin requests)
 CSRF_TRUSTED_ORIGINS = [
+    'https://startip.app',
+    'https://*.startip.app',
+    'https://www.startip.app',
     'http://localhost:5173',
     'http://127.0.0.1:5173',
     'http://localhost:3000',
@@ -190,13 +194,19 @@ CSRF_TRUSTED_ORIGINS = [
     'http://127.0.0.1:8000',
     'http://localhost:8080',
     'http://127.0.0.1:8080',
-    'https://startip.app',
-    'https://*.startip.app',
 ]
 
 _env_csrf = os.getenv('CSRF_TRUSTED_ORIGINS', '')
 if _env_csrf:
     CSRF_TRUSTED_ORIGINS.extend([origin.strip() for origin in _env_csrf.split(',') if origin.strip()])
+
+_domain = os.getenv('DOMAIN', '').strip()
+if _domain:
+    for _scheme in ('https://', 'http://'):
+        _origin = f"{_scheme}{_domain}"
+        if _origin not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(_origin)
+
 
 # Django REST Framework Settings
 REST_FRAMEWORK = {
@@ -228,6 +238,8 @@ SPECTACULAR_SETTINGS = {
         '- **Dokploy Ready**: Dockerfile & multi-container compose configured for automated cloud deployment.'
     ),
     'VERSION': '1.0.0',
+    # Pin to a stable version without the import.meta bundle bug:
+    'REDOC_DIST': 'https://cdn.jsdelivr.net/npm/redoc@2.1.5',
     'SERVE_INCLUDE_SCHEMA': False,
     'SWAGGER_UI_SETTINGS': {
         'deepLinking': True,
@@ -270,9 +282,13 @@ STELLAR_USDC_CODE = 'USDC'
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
 OPENAI_MODEL = os.getenv('OPENAI_MODEL', 'gpt-4o-mini')
 
+# Reverse proxy SSL & Host headers (Traefik, Nginx, Dokploy, Cloudflare)
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+USE_X_FORWARDED_HOST = True
+USE_X_FORWARDED_PORT = True
+
 # Security in Production
 if not DEBUG:
-    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
     SECURE_SSL_REDIRECT = os.getenv('SECURE_SSL_REDIRECT', 'False').lower() in ('true', '1')
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True

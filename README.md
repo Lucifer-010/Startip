@@ -203,25 +203,37 @@ The database comes pre-seeded with creators matching the specification:
 
 ---
 
-## 🌐 Dokploy Live Deployment
+## 🌐 Dokploy & Docker Live Deployment (startip.app)
 
-StarTip is pre-configured for 1-click continuous deployment on [Dokploy](https://dokploy.com):
+StarTip is pre-configured for live deployment on **startip.app** using either [Dokploy](https://dokploy.com) (Compose or Application mode) or Docker Compose on a Linux VPS:
 
-1. Log into your Dokploy dashboard.
-2. Select **Compose** or **Application** deployment.
-3. Point to this repository root.
-4. Set your production environment variables:
-   ```env
-   DJANGO_SECRET_KEY=generate-a-secure-secret-key
-   DJANGO_DEBUG=False
-   DJANGO_ALLOWED_HOSTS=yourdomain.com
-   STELLAR_NETWORK=TESTNET
-   STELLAR_HORIZON_URL=https://horizon-testnet.stellar.org
-   STELLAR_SOROBAN_RPC_URL=https://soroban-testnet.stellar.org
-   OPENAI_API_KEY=sk-...
-   DOMAIN=yourdomain.com
+1. **Option 1: Dokploy Compose Deployment** (Recommended):
+   - In Dokploy, create a new **Compose** service pointing to this repository.
+   - Set environment variables in Dokploy:
+     ```env
+     DOMAIN=startip.app
+     DJANGO_SECRET_KEY=generate-a-secure-random-64-char-key
+     DJANGO_DEBUG=False
+     DJANGO_ALLOWED_HOSTS=startip.app,.startip.app,www.startip.app
+     CSRF_TRUSTED_ORIGINS=https://startip.app,https://*.startip.app,https://www.startip.app
+     STELLAR_NETWORK=TESTNET
+     STELLAR_HORIZON_URL=https://horizon-testnet.stellar.org
+     STELLAR_SOROBAN_RPC_URL=https://soroban-testnet.stellar.org
+     OPENAI_API_KEY=sk-...
+     ```
+   - Click **Deploy**. Traefik will automatically provision Let's Encrypt SSL certificates for `startip.app`, route `/api`, `/admin`, `/overlay`, `/embed`, and `/media` to Gunicorn, and serve the high-performance Nginx React frontend.
+
+2. **Option 2: Dokploy Single Application (Unified Container)**:
+   - In Dokploy, create a new **Application** service using the root `Dockerfile`.
+   - Uses `dokploy.json` for default production build, healthcheck, and environment configuration.
+
+3. **Option 3: Direct VPS Deployment**:
+   ```bash
+   cp .env.example .env
+   # Edit .env with your secrets
+   docker compose up --build -d
    ```
-5. Click **Deploy**. Dokploy will spin up Traefik routing, issue automated Let's Encrypt SSL certificates, run migrations, and serve the application live.
+
 
 ---
 

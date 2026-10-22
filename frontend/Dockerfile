@@ -8,6 +8,14 @@
 FROM node:22-alpine AS base
 WORKDIR /app
 
+ARG VITE_API_BASE_URL
+ARG VITE_FRONTEND_URL
+ARG VITE_VPS_IP
+
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL \
+    VITE_FRONTEND_URL=$VITE_FRONTEND_URL \
+    VITE_VPS_IP=$VITE_VPS_IP
+
 COPY package*.json ./
 RUN npm ci --legacy-peer-deps --prefer-offline --no-audit
 
@@ -28,10 +36,11 @@ COPY . .
 RUN npm run build
 
 # ------------------------------------------------------------------------------
-# Target: production (Nginx Static Server on Port 80)
+# Target: production (Nginx Static Server on Ports 80 and 3000)
 # ------------------------------------------------------------------------------
 FROM nginx:alpine AS production
 COPY --from=builder /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
-EXPOSE 80
+EXPOSE 80 3000
 CMD ["nginx", "-g", "daemon off;"]
+
