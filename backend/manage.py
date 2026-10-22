@@ -5,7 +5,14 @@ import sys
 
 def main():
     """Run administrative tasks."""
-    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'startip_backend.settings')
+    settings_module = os.environ.get('DJANGO_SETTINGS_MODULE', 'startip_backend.settings')
+    try:
+        import importlib
+        importlib.import_module(settings_module)
+    except ModuleNotFoundError:
+        settings_module = 'startip_backend.settings'
+    os.environ['DJANGO_SETTINGS_MODULE'] = settings_module
+
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:
