@@ -11,7 +11,8 @@ import {
   ShieldCheck,
   Sparkles,
   AlertCircle,
-  Bell
+  Bell,
+  Share2
 } from 'lucide-react';
 import { StellarWalletsKit, Networks } from '@creit.tech/stellar-wallets-kit';
 import { api, CreatorProfile, WidgetConfig } from '../services/api';
@@ -58,6 +59,7 @@ export function PublicTipPage() {
     recipientName: string;
   } | null>(null);
   const [copiedHash, setCopiedHash] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
 
   // Fetch Public Creator Profile & Specific Widget Config
   useEffect(() => {
@@ -79,6 +81,36 @@ export function PublicTipPage() {
         // Preload default amounts
         const defaultXlm = wConfig?.preset_amounts_xlm?.[0] || 10;
         setAmount(defaultXlm);
+
+        // Update document title and Open Graph metadata
+        const title = `⚡ Tip ${profile.display_name} (@${profile.username}) — StarTip`;
+        document.title = title;
+
+        const updateMeta = (prop: string, val: string) => {
+          let el = document.querySelector(`meta[property="${prop}"]`) || document.querySelector(`meta[name="${prop}"]`);
+          if (el) {
+            el.setAttribute('content', val);
+          } else {
+            const meta = document.createElement('meta');
+            if (prop.startsWith('og:')) {
+              meta.setAttribute('property', prop);
+            } else {
+              meta.setAttribute('name', prop);
+            }
+            meta.setAttribute('content', val);
+            document.head.appendChild(meta);
+          }
+        };
+
+        const bio = profile.bio || wConfig?.welcome_message || 'Send instant non-custodial tips in XLM or USDC directly to my Stellar wallet.';
+        const ogImage = `https://startip.app/api/og/${profile.username}.png`;
+        updateMeta('og:title', title);
+        updateMeta('twitter:title', title);
+        updateMeta('og:description', bio);
+        updateMeta('twitter:description', bio);
+        updateMeta('og:image', ogImage);
+        updateMeta('twitter:image', ogImage);
+        updateMeta('og:url', window.location.href);
       })
       .catch((err) => {
         console.error('Failed to load creator profile:', err);
@@ -87,6 +119,10 @@ export function PublicTipPage() {
       .finally(() => {
         setLoading(false);
       });
+
+    return () => {
+      document.title = 'StarTip — Instant Creator Tips on Stellar';
+    };
   }, [creatorUsername, widgetSlug]);
 
   // Dynamic Presets
@@ -337,9 +373,41 @@ export function PublicTipPage() {
           </span>
         </div>
 
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#0B1026] border border-white/10 text-xs text-[#C6FF3D] font-semibold">
-          <span className="w-2 h-2 rounded-full bg-[#C6FF3D] animate-pulse" />
-          <span>Stellar Testnet</span>
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={() => {
+              const shareUrl = window.location.href;
+              const title = `⚡ Tip ${creator?.display_name || creator?.username} on StarTip`;
+              const text = creator?.bio || `Send instant non-custodial tips in XLM or USDC to ${creator?.display_name || creator?.username} on Stellar!`;
+              if (navigator.share) {
+                navigator.share({ title, text, url: shareUrl }).catch(() => {});
+              } else {
+                navigator.clipboard.writeText(shareUrl).then(() => {
+                  setCopiedLink(true);
+                  setTimeout(() => setCopiedLink(false), 2000);
+                });
+              }
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#0B1026] hover:bg-[#141A3A] border border-white/15 text-xs text-white/90 hover:text-white transition cursor-pointer font-medium"
+            title="Share this tip link"
+          >
+            {copiedLink ? (
+              <>
+                <Check className="w-3.5 h-3.5 text-[#C6FF3D]" />
+                <span className="text-[#C6FF3D]">Link Copied!</span>
+              </>
+            ) : (
+              <>
+                <Share2 className="w-3.5 h-3.5 text-[#C6FF3D]" />
+                <span>Share</span>
+              </>
+            )}
+          </button>
+
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#0B1026] border border-white/10 text-xs text-[#C6FF3D] font-semibold">
+            <span className="w-2 h-2 rounded-full bg-[#C6FF3D] animate-pulse" />
+            <span>Stellar Testnet</span>
+          </div>
         </div>
       </header>
 

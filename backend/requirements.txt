@@ -13,3 +13,4 @@ requests>=2.32.3
 openai>=1.55.0
 celery>=5.4.0
 redis>=5.0.0
+pillow>=10.4.0

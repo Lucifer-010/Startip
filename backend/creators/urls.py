@@ -8,6 +8,8 @@ from .views import (
     CreatorPublicProfileView,
     CreatorDashboardView,
     CreatorEmbedCodeView,
+    creator_og_image_api,
+    creator_social_preview_view,
 )
 
 urlpatterns = [
@@ -19,4 +21,6 @@ urlpatterns = [
     path('creators/me/dashboard/', CreatorDashboardView.as_view(), name='creator-dashboard'),
     path('creators/<str:username>/', CreatorPublicProfileView.as_view(), name='creator-public'),
     path('creators/<str:username>/embed-code/', CreatorEmbedCodeView.as_view(), name='creator-embed-code'),
+    path('og/<str:username>.png', creator_og_image_api, name='creator-og-image'),
+    path('social-preview/<str:username>/', creator_social_preview_view, name='creator-social-preview'),
 ]

@@ -1,5 +1,8 @@
 from decimal import Decimal
 from django.utils import timezone
+from django.utils.html import escape
+from django.http import HttpResponse
+from django.shortcuts import redirect
 from django.db.models import Sum, Count, Q
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -511,3 +514,120 @@ class CreatorEmbedCodeView(APIView):
             'javascript_code': js_code,
             'overlay_url': overlay_url,
         })
+
+
+def creator_og_image_api(request, username):
+    """
+    Renders 1200x630 dynamic Open Graph PNG social preview card for a creator.
+    Used by Twitter/X, Discord, Telegram, WhatsApp, LinkedIn, iMessage.
+    """
+    creator = None
+    try:
+        creator = CreatorProfile.objects.prefetch_related('widgets').filter(username__iexact=username).first()
+    except Exception:
+        pass
+
+    if not creator:
+        from types import SimpleNamespace
+        creator = SimpleNamespace(
+            username=username,
+            display_name=username.replace('-', ' ').replace('_', ' ').title(),
+            bio="Send instant non-custodial tips in XLM or USDC directly to my Stellar wallet.",
+            avatar_url="",
+            widget_config=None,
+        )
+
+    from .og_image import render_creator_og_bytes
+    img_bytes = render_creator_og_bytes(creator)
+    response = HttpResponse(img_bytes, content_type='image/png')
+    response['Cache-Control'] = 'public, max-age=86400, s-maxage=86400'
+    return response
+
+
+def creator_social_preview_view(request, username):
+    """
+    Lightweight, crawler-optimized HTML endpoint for social platforms
+    (Twitter/X, Discord, Telegram, WhatsApp, Facebook, LinkedIn, iMessage).
+    Renders rich Open Graph & Twitter Cards, plus fallback meta-refresh for browsers.
+    """
+    creator = None
+    try:
+        creator = CreatorProfile.objects.prefetch_related('widgets').filter(username__iexact=username).first()
+    except Exception:
+        pass
+
+    if not creator:
+        from types import SimpleNamespace
+        creator = SimpleNamespace(
+            username=username,
+            display_name=username.replace('-', ' ').replace('_', ' ').title(),
+            bio="Send instant non-custodial tips in XLM or USDC directly to my Stellar wallet with live on-stream alerts.",
+            avatar_url="",
+            widget_config=None,
+        )
+
+    display_name = getattr(creator, 'display_name', '') or creator.username
+    clean_username = creator.username
+    bio = getattr(creator, 'bio', '') or (creator.widget_config.welcome_message if getattr(creator, 'widget_config', None) else "")
+    if not bio:
+        bio = "Send instant non-custodial tips in XLM or USDC directly to my Stellar wallet with live on-stream alerts."
+
+    # Absolute URLs for social crawlers (always startip.app in prod)
+    host = "startip.app" if "startip.app" in request.get_host() else request.get_host()
+    scheme = "https" if "startip.app" in host else request.scheme
+    base_url = f"{scheme}://{host}"
+
+    page_url = f"{base_url}/tip/{clean_username}"
+    og_image_url = f"{base_url}/api/og/{clean_username}.png"
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>⚡ Tip {escape(display_name)} (@{escape(clean_username)}) — StarTip</title>
+  <meta name="description" content="{escape(bio)}">
+
+  <!-- Open Graph / Facebook / LinkedIn / WhatsApp -->
+  <meta property="og:site_name" content="StarTip">
+  <meta property="og:type" content="profile">
+  <meta property="og:url" content="{page_url}">
+  <meta property="og:title" content="⚡ Tip {escape(display_name)} (@{escape(clean_username)}) — StarTip">
+  <meta property="og:description" content="{escape(bio)}">
+  <meta property="og:image" content="{og_image_url}">
+  <meta property="og:image:secure_url" content="{og_image_url}">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Tip {escape(display_name)} on StarTip">
+
+  <!-- Twitter Cards -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:site" content="@StarTipApp">
+  <meta name="twitter:creator" content="@StarTipApp">
+  <meta name="twitter:title" content="⚡ Tip {escape(display_name)} (@{escape(clean_username)}) — StarTip">
+  <meta name="twitter:description" content="{escape(bio)}">
+  <meta name="twitter:image" content="{og_image_url}">
+  <meta name="theme-color" content="#070A1A">
+
+  <!-- Automatic fallback redirect to React SPA for standard browsers -->
+  <meta http-equiv="refresh" content="0; url=/tip/{clean_username}">
+  <script>
+    if (typeof window !== 'undefined' && window.location) {{
+      window.location.replace("/tip/{clean_username}");
+    }}
+  </script>
+</head>
+<body style="margin:0;padding:40px;background:#070A1A;color:#FFFFFF;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;text-align:center;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+  <div style="max-width:480px;background:#0E1333;border:1px solid rgba(255,255,255,0.15);border-radius:24px;padding:32px;box-shadow:0 20px 40px rgba(0,0,0,0.5);">
+    <div style="font-size:36px;margin-bottom:12px;">⚡</div>
+    <h1 style="font-size:24px;margin:0 0 8px 0;color:#FFFFFF;">Tip {escape(display_name)}</h1>
+    <div style="font-size:16px;color:#C6FF3D;font-weight:bold;margin-bottom:16px;">@{escape(clean_username)}</div>
+    <p style="font-size:14px;color:#94A3B8;line-height:1.5;margin-bottom:24px;">{escape(bio)}</p>
+    <a href="/tip/{clean_username}" style="display:inline-block;background:#C6FF3D;color:#0B1026;text-decoration:none;font-weight:bold;font-size:15px;padding:14px 28px;border-radius:9999px;">
+      Launch Tip Page →
+    </a>
+  </div>
+</body>
+</html>"""
+    return HttpResponse(html, content_type="text/html; charset=utf-8")

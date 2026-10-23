@@ -11,6 +11,7 @@ from drf_spectacular.views import (
 )
 
 from alerts.views import overlay_page_view
+from creators.views import creator_social_preview_view
 from .views import (
     embed_widget_view,
     embed_widget_js_view,
@@ -44,6 +45,7 @@ urlpatterns = [
     re_path(r'^static/widget\.js$', embed_widget_js_view, name='embed-widget-js-static'),
     re_path(r'^embed/(?P<username>[a-zA-Z0-9_\-\.]+)/?$', embed_widget_view, name='embed-widget'),
     re_path(r'^tip/(?P<username>[a-zA-Z0-9_\-\.]+)/?$', embed_widget_view, name='direct-tip-page'),
+    path('tip-og/<str:username>/', creator_social_preview_view, name='tip-og-preview'),
     path('demo-bench/', demo_page_view, name='demo-page'),
 ]
 
