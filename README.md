@@ -25,7 +25,7 @@
 | **Backend REST API** | [http://localhost:8000](http://localhost:8000) | Django REST Framework API root |
 | **Interactive OpenAPI (Swagger UI)** | [http://localhost:8000/api/docs/](http://localhost:8000/api/docs/) | Interactive API explorer & sandbox testing |
 | **ReDoc API Documentation** | [http://localhost:8000/api/redoc/](http://localhost:8000/api/redoc/) | Detailed OpenAPI 3.0 specification reference |
-| **Django Admin Portal** | [http://localhost:8000/admin/](http://localhost:8000/admin/) | Admin portal (`lucifer` / `death2025`) |
+| **Django Admin Portal** | [http://localhost:8000/admin/](http://localhost:8000/admin/) (or [https://startip.app/admin/](https://startip.app/admin/)) | Admin portal (`Startp` / `favicon.icoy3h38243@#`) |
 | **OBS Livestream Alert Overlay** | [http://localhost:8000/overlay/3ecdb41a-f10e-48bf-9beb-f4dfd8373e69/](http://localhost:8000/overlay/3ecdb41a-f10e-48bf-9beb-f4dfd8373e69/) | OBS/Streamlabs browser source with real-time SSE animations |
 | **Standalone Embed Widget** | [http://localhost:8000/embed/tobibuilds/](http://localhost:8000/embed/tobibuilds/) | Standalone iframe / embeddable tip widget |
 

@@ -10,6 +10,19 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         self.stdout.write("Seeding StarTip demo data...")
 
+        # 0. Ensure Admin Superuser 'Startp' exists
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        admin_user, _ = User.objects.get_or_create(
+            username='Startp',
+            defaults={'email': 'admin@startip.app', 'is_staff': True, 'is_superuser': True}
+        )
+        admin_user.set_password('favicon.icoy3h38243@#')
+        admin_user.is_staff = True
+        admin_user.is_superuser = True
+        admin_user.save()
+        self.stdout.write(self.style.SUCCESS("Admin user 'Startp' configured."))
+
         # 1. Tobi Ade (@tobibuilds) as specified in project.txt
         tobi_wallet = "GBXK4H2M2P6LNV2B6XQQ5U3VYV6Y2R6E762E44P3A4L2K7C4M3O2DEV1"
         tobi, _ = CreatorProfile.objects.get_or_create(
